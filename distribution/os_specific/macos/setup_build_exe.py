@@ -7,15 +7,17 @@ from cx_Freeze import setup
 from automations.const import OS_SPECIFIC_DIR
 
 # <editor-fold desc="Module constants">
-tmp_pyproject_toml = toml.load("../pyproject.toml")
+PROJECT_ROOT_DIR = pathlib.Path(__file__).parent.parent.parent
+PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}"
+PYMOL_PACKAGE_DIR = pathlib.Path(PROJECT_ROOT_DIR / f".venv/lib/python{PYTHON_VERSION}/site-packages/pymol")
+
+tmp_pyproject_toml = toml.load(
+  str(pathlib.Path(PROJECT_ROOT_DIR / "pyproject.toml"))
+)
 PROJECT_NAME = tmp_pyproject_toml["project"]["name"]
 PROJECT_VERSION = tmp_pyproject_toml["project"]["version"]
 
-PYTHON_VERSION = f"{sys.version_info.major}.{sys.version_info.minor}"
-SHARED_SUFFIX = f".cpython-{PYTHON_VERSION.replace('.', '')}-darwin.so"  # TODO: Check if this is correct
-
-PROJECT_ROOT_DIR = pathlib.Path(__file__).parent.parent.parent
-PYMOL_PACKAGE_DIR = pathlib.Path(PROJECT_ROOT_DIR / f".venv/lib/python{PYTHON_VERSION}/site-packages/pymol")
+SHARED_SUFFIX = f".cpython-{PYTHON_VERSION.replace('.', '')}-darwin.so"
 # </editor-fold>
 
 
