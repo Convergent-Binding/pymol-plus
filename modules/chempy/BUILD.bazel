@@ -1,0 +1,24 @@
+# The pure-Python `chempy` package. _champ is put into the wheel by
+# //tools/bazel/wheel_staging and staged here for Bazel tests.
+
+load("@rules_python//python:defs.bzl", "py_library")
+load("//tools/bazel:relocate.bzl", "relocate_file")
+
+py_library(
+    name = "chempy",
+    srcs = glob(["**/*.py"]),
+    imports = [".."],
+    visibility = ["//visibility:public"],
+)
+
+# _champ staged beside chempy/champ/__init__.py, untagged for the reason
+# given at //modules/pymol:cmd_extension_for_run.
+relocate_file(
+    name = "champ_extension_for_run",
+    src = "//contrib/champ:_champ.so",
+    out = select({
+        "@platforms//os:windows": "champ/_champ.pyd",
+        "//conditions:default": "champ/_champ.so",
+    }),
+    visibility = ["//visibility:public"],
+)

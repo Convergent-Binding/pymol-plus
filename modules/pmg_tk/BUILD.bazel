@@ -1,0 +1,10 @@
+# The pure-Python `pmg_tk` package.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "pmg_tk",
+    srcs = glob(["**/*.py"]),
+    imports = [".."],
+    visibility = ["//visibility:public"],
+)

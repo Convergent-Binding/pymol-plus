@@ -50,3 +50,22 @@ py_test(
     args = ["$(rootpath //contrib/champ:_champ.so)"],
     data = ["//contrib/champ:_champ.so"],
 )
+
+# PyMOL imports and runs headless from modules/ with the built extensions and
+# data staged beside the packages.
+py_test(
+    name = "import_smoke_test",
+    size = "small",
+    srcs = ["import_smoke_test.py"],
+    data = [
+        "//modules/chempy:champ_extension_for_run",
+        "//modules/pymol:cmd_extension_for_run",
+        "//modules/pymol:runtime_data_for_run",
+    ],
+    deps = [
+        "//modules/chempy",
+        "//modules/pymol",
+        "//modules/pymol2",
+        "@pymol_pip//numpy",
+    ],
+)

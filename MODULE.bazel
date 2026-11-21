@@ -126,3 +126,40 @@ http_archive(
     type = "zip",
     url = "https://files.pythonhosted.org/packages/8c/3d/1e1db36cfd41f895d266b103df00ca5b3cbe965184df824dec5c08c6b803/numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
 )
+
+# Python packages the Bazel tests import (NumPy for the _cmd import smoke
+# test), one lock parse per registered interpreter so each test resolves the
+# wheel built for the Python version its invocation selected.
+pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
+
+pip.parse(
+    hub_name = "pymol_pip",
+    python_version = "3.10",
+    requirements_lock = "//tools/bazel:requirements_lock.txt",
+)
+
+pip.parse(
+    hub_name = "pymol_pip",
+    python_version = "3.11",
+    requirements_lock = "//tools/bazel:requirements_lock.txt",
+)
+
+pip.parse(
+    hub_name = "pymol_pip",
+    python_version = "3.12",
+    requirements_lock = "//tools/bazel:requirements_lock.txt",
+)
+
+pip.parse(
+    hub_name = "pymol_pip",
+    python_version = "3.13",
+    requirements_lock = "//tools/bazel:requirements_lock.txt",
+)
+
+pip.parse(
+    hub_name = "pymol_pip",
+    python_version = "3.14",
+    requirements_lock = "//tools/bazel:requirements_lock.txt",
+)
+
+use_repo(pip, "pymol_pip")

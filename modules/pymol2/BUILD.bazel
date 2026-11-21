@@ -1,0 +1,10 @@
+# The pure-Python `pymol2` package.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "pymol2",
+    srcs = glob(["**/*.py"]),
+    imports = [".."],
+    visibility = ["//visibility:public"],
+)
