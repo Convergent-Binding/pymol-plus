@@ -46,6 +46,9 @@ distribution/README.md.
 - Linux packages on 8 distributions: `tests/test_linux_package.sh <package>` in a container
 
 **Rules:**
+- Pull requests get the Bazel check only; the wheel matrix (`wheels.yaml`, 35-40 minutes) runs on
+  pushes to `release-stage/<version>` branches, on `v*` tags and by hand. Stage a wheel release on
+  such a branch, merge it, then tag it.
 - Changes reach `production` only through pull requests, Dependabot's included; Hannah (kullik01)
   or Martin (urban233) approves and merges by hand, nothing merges automatically. The ruleset of `production` requires
   the green `release` check; merged branches are deleted automatically.

@@ -14,34 +14,22 @@
 #Z* -------------------------------------------------------------------
 name: Build Wheels
 
-# The C++ (_cmd) builds take 35-40 minutes, so pull requests only build wheels when
-# they change something that can end up in a wheel. Release tags (v*) and manual runs
+# The C++ (_cmd) builds take 35-40 minutes for the whole matrix, so they run only
+# before a release, not on every pull request (Bazel, bazel.yaml, builds and tests
+# each pull request on all four platforms). To stage a release, push a branch
+# release-stage/<version> and open its pull request into production; every push
+# to it builds and tests all wheels. Release tags (v*) and manual runs
 # (Actions > Build Wheels > Run workflow) always build.
 on:
-  pull_request:
-    branches: [production]
-    paths-ignore:
-      # The ready-to-run app and its workflows and settings
-      - 'distribution/**'
-      - '.github/workflows/build_app.yaml'
-      - '.github/workflows/docs.yaml'
-      - '.github/dependabot.yml'
-      - '.github/release.yml'
-      - '.github/ISSUE_TEMPLATE/**'
-      # Documentation and AI tooling
-      - 'docs/**'
-      - '**/*.md'
-      - '.opp/**'
-      - '.codegraph/**'
-      - '.mailmap'
-  workflow_dispatch:
   push:
+    branches: ["release-stage/**"]
     tags: ["v*"]
+  workflow_dispatch:
 
-# A newer push to a pull request cancels its outdated wheel build
+# A newer push to a release-stage branch cancels its outdated wheel build
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/heads/release-stage/') }}
 
 permissions:
   contents: read
@@ -312,8 +300,7 @@ jobs:
     needs: release-integrity
     if: >
       startsWith(github.ref, 'refs/tags/v') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+      startsWith(github.ref, 'refs/heads/release-stage/')
     permissions:
       attestations: write
       id-token: write
