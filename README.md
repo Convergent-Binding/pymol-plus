@@ -70,36 +70,32 @@ in-tree build backend stops with instructions instead of producing a wheel witho
   (macOS), or GCC with the OpenGL development headers (Linux, e.g. `mesa-libGL-devel`).
 - On Windows, Developer Mode (Settings > System > For developers), which lets Bazel create
   the symlinks its Python tests need.
-- [uv](https://docs.astral.sh/uv/) for the development environment.
 
 ### Build and test
-Run from the repository root:
+Bazel does everything; there is no separate development environment to set up. Run from
+the repository root:
 
-1. Sync the development environment:
-    ```shell
-    uv sync --locked
-    ```
-
-2. Build this platform's wheel for the running Python (or pass `python=3.X`):
-    ```shell
-    ./pymake.bat build_wheel     # Windows
-    ./pymake.sh build_wheel      # macOS/Linux
-    ```
-    The wheel is written to `bazel-bin/tools/bazel/wheel/`. Bazel can build it directly too:
+1. Build this platform's wheel (the default Python is 3.10; select another as shown):
     ```shell
     bazel build //tools/bazel/wheel:wheel --@rules_python//python/config_settings:python_version=3.12
     ```
+    The wheel is written to `bazel-bin/tools/bazel/wheel/` and installs with `pip install`.
 
-3. Build, install and test the wheel for the running Python:
-    ```shell
-    ./pymake.bat test  # Windows
-    ./pymake.sh test   # macOS/Linux
-    ```
-    This runs the tests under `tests/` against the installed wheel.
-
-4. Run the Bazel tests (wheel metadata and layout, generated shader headers, native import):
+2. Run all tests: the tests under `tests/` (pytest, against the built extensions) and the
+   build tests (wheel metadata and layout, generated shader headers, native import):
     ```shell
     bazel test //...
+    ```
+    Only the tests under `tests/`, or a selection of them:
+    ```shell
+    bazel test //tests
+    bazel test //tests --test_arg=-k --test_arg=undo
+    ```
+
+3. After changing `tools/bazel/requirements.in` (the Python packages the tests import),
+   update its lock:
+    ```shell
+    bazel run //tools/bazel:requirements.update
     ```
 
 Machine-local Bazel options go into an ignored `user.bazelrc` at the repository root.

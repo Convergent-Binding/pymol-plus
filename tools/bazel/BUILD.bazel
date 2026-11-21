@@ -1,6 +1,7 @@
 # Starlark helpers and build-time tools for the Bazel build of the wheel.
 
 load("@rules_python//python:defs.bzl", "py_binary")
+load("@rules_python//python/uv:lock.bzl", "lock")
 load(":shader_gen.bzl", "pymol_generated_headers")
 
 py_binary(
@@ -18,3 +19,17 @@ pymol_generated_headers(
 )
 
 exports_files(["requirements_lock.txt"])
+
+# Locks requirements.in into requirements_lock.txt for every supported Python,
+# with the uv binary rules_python fetches. Tagged manual, as it needs the
+# network; update the lock with `bazel run //tools/bazel:requirements.update`.
+lock(
+    name = "requirements",
+    srcs = ["requirements.in"],
+    out = "requirements_lock.txt",
+    args = [
+        "--universal",
+        "--python-version",
+        "3.10",
+    ],
+)

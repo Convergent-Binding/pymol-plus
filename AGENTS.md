@@ -37,7 +37,8 @@ distribution/README.md.
 
 **Wheel commands** (repository root):
 - `bazel build //tools/bazel/wheel:wheel`: this platform's wheel, into `bazel-bin/tools/bazel/wheel/`
-- `bazel test //...`: the Bazel tests
+- `bazel test //...`: all tests; `bazel test //tests` only the pytest tests under `tests/`
+- `bazel run //tools/bazel:requirements.update`: relock `tools/bazel/requirements.in`
 
 **App commands** (in `distribution/`; Windows: `win_automator.bat` instead of `./automator.sh`):
 - `./automator.sh setup`: fresh `.venv` with the Python of `.python-version` and `requirements.txt` (uv)
