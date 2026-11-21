@@ -189,7 +189,8 @@ jobs:
 
       - name: Build and test wheels
         run: |
-          export ARCH=$(uname -m)
+          ARCH="$(uname -m)"
+          export ARCH
           export MACOSX_DEPLOYMENT_TARGET=12.0
           uv run --locked --no-sync python pymakefile.py build_wheels
 
