@@ -5,6 +5,8 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 load("//tools/bazel:wheel_merge.bzl", "merge_wheel_files")
 
+exports_files(["tests/edited_base_test.py"])
+
 # The packages of distribution/requirements.in in one site-packages, as pip
 # would install them: PySide6 finds shiboken6 and Qt only as real siblings.
 merge_wheel_files(
