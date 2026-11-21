@@ -34,7 +34,7 @@ The built wheel installs with pip in the normal way:
 
     pip install bazel-bin/tools/bazel/wheel/pymol_open_source_whl-*.whl
 
-See docs/features/bazel-build/.\
+See "Build wheel file" in README.md.\
 """
 
 

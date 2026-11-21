@@ -1,0 +1,8 @@
+{
+  "style": {
+    "exclude": ["distribution/edited/**"],
+    "cpp": {
+      "legacy": ["contrib/**", "include/**", "layer*/**", "ov/**"]
+    }
+  }
+}

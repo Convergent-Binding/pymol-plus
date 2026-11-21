@@ -102,7 +102,7 @@ uvx pre-commit install            # before every commit from now on
 - Changes reach `production` only through pull requests; the ruleset of `production` requires the green
   `release` check, which fails if any other CI job failed. Every pull request, Dependabot's
   included, is approved and merged by hand by kullik01 or urban233; nothing merges automatically.
-- A pull request that only changes text files (README, `AGENTS.md`, Dependabot and
+- A pull request that only changes text files (README, Dependabot and
   release-notes settings) or only files outside `distribution/` skips the app builds (about 1 instead of 8–10 minutes).
 - macOS Intel is the slowest job. GitHub supports its Intel runners (`macos-15-intel`) only
   until about August–autumn 2027; then the Intel DMG needs a decision (for example built on

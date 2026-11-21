@@ -1,6 +1,6 @@
 # Bazel configuration for the pymol-open-source-whl build. Ported from
 # open-protein-platform, where each of these lines answers a failure found on
-# a real CI run; see docs/features/bazel-build/.
+# a real CI run.
 
 # Release builds, as CMake's Release build type was: optimised, with NDEBUG
 # defined so the asserts in layer*/ compile out. Bazel's default, fastbuild,

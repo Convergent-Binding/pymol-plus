@@ -12,3 +12,7 @@ generated
 # Bazel convenience symlinks into its output base, not repository content.
 /bazel-*
 /user.bazelrc
+
+# Written by the opp-workflow plugin: what it writes into the checkout.
+/graphify-out/
+/.opp/local/
