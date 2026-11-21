@@ -12,3 +12,7 @@ generated
 /vendor/
 /dist/
 /wheelhouse/
+
+# Bazel convenience symlinks into its output base, not repository content.
+/bazel-*
+/user.bazelrc

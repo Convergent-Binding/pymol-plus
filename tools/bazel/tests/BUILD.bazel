@@ -1,0 +1,19 @@
+load("@rules_python//python:defs.bzl", "py_test")
+
+# Holds //tools/bazel:pyproject.bzl's Starlark reading of pyproject.toml to
+# CPython's tomllib. Pinned to 3.12 because tomllib needs 3.11 and the
+# default toolchain is the 3.10 floor.
+py_test(
+    name = "pyproject_metadata_test",
+    size = "small",
+    srcs = ["pyproject_metadata_test.py"],
+    args = [
+        "$(rootpath @pymol_project_metadata//:metadata.json)",
+        "$(rootpath //:pyproject.toml)",
+    ],
+    data = [
+        "//:pyproject.toml",
+        "@pymol_project_metadata//:metadata.json",
+    ],
+    python_version = "3.12",
+)

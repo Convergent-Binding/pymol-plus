@@ -1,0 +1,43 @@
+"""Bazel build of the pymol-open-source-whl wheel.
+
+Ported from open-protein-platform's Bazel build of the same PyMOL sources (see
+docs/features/bazel-build/). Every native dependency is declared here and
+fetched by Bazel, pinned by checksum, instead of being read from vcpkg, the
+former pre-built/ directory or any other ambient installation.
+"""
+
+module(name = "pymol_plus")
+
+bazel_dep(name = "platforms", version = "1.1.0")
+
+# The Apple C++ toolchain, declared ahead of rules_cc so that it is the one
+# resolved on macOS: rules_cc's auto-configured toolchain fails Bazel's
+# absolute-path inclusion check with recent Xcode releases, and apple_support
+# before 2.5.2 counted ~/Library as built-in include directories, so header
+# changes recompiled nothing. It applies to Apple targets only.
+bazel_dep(name = "apple_support", version = "2.9.0")
+bazel_dep(name = "rules_cc", version = "0.2.22")
+bazel_dep(name = "rules_python", version = "2.3.2")
+bazel_dep(name = "bazel_skylib", version = "1.8.2")
+
+# pyproject.toml's [project] table, read once and exposed as loadable
+# constants, so the wheel rules keep no second copy of the name, version,
+# requires-python or dependency list.
+pyproject = use_extension("//tools/bazel:pyproject_repo.bzl", "pyproject")
+use_repo(pyproject, "pymol_project_metadata")
+
+# One toolchain per CPython version the wheels are built for. 3.10, the
+# `requires-python` floor, is the default, so an invocation that names no
+# version builds the oldest supported one. Select another per invocation with
+# --@rules_python//python/config_settings:python_version=3.X; the extensions
+# link against version-specific headers (and, on Windows, a version-specific
+# import library), so the choice stays an explicit flag.
+python = use_extension("@rules_python//python/extensions:python.bzl", "python")
+python.toolchain(
+    is_default = True,
+    python_version = "3.10",
+)
+python.toolchain(python_version = "3.11")
+python.toolchain(python_version = "3.12")
+python.toolchain(python_version = "3.13")
+python.toolchain(python_version = "3.14")

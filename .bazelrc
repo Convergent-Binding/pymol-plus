@@ -1,0 +1,36 @@
+# Bazel configuration for the pymol-open-source-whl build. Ported from
+# open-protein-platform, where each of these lines answers a failure found on
+# a real CI run; see docs/features/bazel-build/.
+
+# The wheels are tagged macosx_12_0, so the binaries must not need more.
+build --macos_minimum_os=12.0
+
+# PyMOLBuildInfo.h's git SHA comes from Bazel's stable workspace status rather
+# than from a `git` call inside a build action. On Windows the status command
+# must be a cmd.exe script: launching a .sh file through MSYS2 as Bazel's raw
+# subprocess deadlocked on Windows CI.
+common --enable_platform_specific_config
+build:linux --workspace_status_command=tools/bazel/workspace_status.sh
+build:macos --workspace_status_command=tools/bazel/workspace_status.sh
+build:windows --workspace_status_command=tools/bazel/workspace_status.bat
+
+# Bazel's documented Windows configuration. Without real file symlinks a
+# runfiles entry for a generated file becomes a directory-typed reparse point,
+# and loading an extension through it fails with "Access is denied". Symlink
+# creation needs Developer Mode or an elevated Bazel; GitHub's Windows runners
+# run elevated. A startup option cannot be scoped to a config, and it is a
+# no-op off Windows.
+startup --windows_enable_symlinks
+build:windows --enable_runfiles
+
+# A wider window for external-repository fetches: a single 504 from GitHub's
+# release CDN otherwise fails the whole build before anything compiles.
+common --http_timeout_scaling=2.0
+common --experimental_repository_downloader_retries=8
+common --http_connector_attempts=12
+
+# Machine-local overrides, never committed. A Windows workstation without
+# Developer Mode cannot create symlinks; there `startup
+# --nowindows_enable_symlinks` in user.bazelrc lets Bazel run, with the
+# runfiles caveat described above.
+try-import %workspace%/user.bazelrc

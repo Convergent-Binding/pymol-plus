@@ -1,0 +1,2 @@
+# Starlark helpers for the Bazel build of the wheel; see
+# docs/features/bazel-build/.
