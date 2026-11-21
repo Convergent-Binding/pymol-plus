@@ -1,5 +1,5 @@
 # PocketFFT, header-only (see LICENSE.md), included from _cmd sources via
-# CMakeLists.txt's `contrib/pocketfft` include entry.
+# the former CMakeLists.txt's `contrib/pocketfft` include entry.
 
 load("@rules_cc//cc:defs.bzl", "cc_library")
 

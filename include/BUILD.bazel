@@ -1,6 +1,6 @@
 # PyMOL's own `pymol/*.h` and the vendored TNT/JAMA `tnt/*.h` headers, included
 # from the _cmd sources as `#include "pymol/....h"` and `#include <tnt/....h>`
-# (CMakeLists.txt's `include` entry in ALL_INCLUDE_DIR).
+# (the former CMakeLists.txt's `include` entry in ALL_INCLUDE_DIR).
 
 load("@rules_cc//cc:defs.bzl", "cc_library")
 

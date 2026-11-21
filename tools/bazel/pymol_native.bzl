@@ -1,6 +1,6 @@
 """Shared compile and link settings for PyMOL's native sources.
 
-Mirrors CMakeLists.txt (as of the Bazel migration's base, integrate-setup
+Mirrors the former CMakeLists.txt (as of the Bazel migration's base, integrate-setup
 2311f027) exactly: `ALL_COMPILER_DEFS`, `ALL_COMPILER_ARGS` and the
 `OS_SPECIFIC_*` lists of its WIN32, APPLE and UNIX branches. Ported from
 open-protein-platform's tools/bazel/pymol_native.bzl, which dropped

@@ -20,7 +20,7 @@ exports_files([
 ])
 
 # The `_cmd` extension (pymol._cmd, PyInit__cmd in layer4/Cmd.cpp), built from
-# the upstream source layout in place. The globs cover exactly CMakeLists.txt's
+# the upstream source layout in place. The globs cover exactly the former CMakeLists.txt's
 # former ALL_SRC list (checked when the Bazel build was introduced); the molfile
 # plugin sources it also listed are //contrib/uiuc/plugins/molfile_plugin/src.
 # A new upstream source file in these directories is compiled automatically.
@@ -54,7 +54,7 @@ cc_binary(
     copts = PYMOL_COPTS,
     cxxopts = PYMOL_CXXOPTS,
     defines = PYMOL_DEFINES,
-    # CMakeLists.txt's ALL_INCLUDE_DIR; include/, contrib/pocketfft and the
+    # the former CMakeLists.txt's ALL_INCLUDE_DIR; include/, contrib/pocketfft and the
     # molfile headers come with their libraries in `deps`.
     includes = [
         "layer0",

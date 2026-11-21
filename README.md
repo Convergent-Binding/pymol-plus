@@ -20,13 +20,11 @@ If you are searching for PyMOL as ready-to-use application, see
 ## Contents of this document
 * [About PyMOL](#About-PyMOL)
 * [Contents of this repository](#Contents-of-this-repository)
-    * [Scripts](#Scripts)
-    * [Pre-built](#Pre-built)
-    * [Vcpkg](Vcpkg)
+* [Install](#Install)
 * [Build wheel file](#Build-wheel-file)
-* [From source](#From-source)
     * [Prerequisites](#Prerequisites)
-    * [Step-by-step guide](#Step-by-step-guide)
+    * [Build and test](#Build-and-test)
+    * [Release wheels](#Release-wheels)
 * [License](#License)
 * [Acknowledgements](#Acknowledgements)
 <!--* [References and useful links](#References-and-useful-links) -->
@@ -50,20 +48,10 @@ original commit in an `Original-commit:` line. Wheel releases use `v*` tags, app
 `setup-v*` tags. Updates from Schrödinger arrive by syncing the fork's `master` branch and
 merging it into `production`.
 
-### Scripts
-There is one Python script that is used for building PyMOL specific shader files.
-
-### Pre-built
-To enable the direct build of a ready-to-use wheel file, a pre-built
-`_cmd` module is already compiled and will be used in the wheel build process
-if no self built one can be found.
-Furthermore, the libGL library is also provided to make the build process
-easier and less error-prone.
-
-### Vcpkg
-To make the build process of the `_cmd` module as easy and convenient as
-possible, the vcpkg package manager is used. The package manager should
-handle all build dependencies PyMOL needs.
+The wheel is built with [Bazel](https://bazel.build/) from the upstream source layout in
+place: the `BUILD.bazel` files beside the sources, `MODULE.bazel` for the pinned native
+dependencies (FreeType, GLEW, GLM, libpng, libxml2, netCDF, zlib and the NumPy C headers,
+all fetched and built by Bazel) and `tools/bazel/` for the build rules and Bazel tests.
 
 ## Install
 To install PyMOL run:
@@ -72,79 +60,65 @@ pip install pymol-open-source-whl
 ```
 
 ## Build wheel file
-To build the wheel file (based on the provided pre-built `_cmd` module), follow these steps (the working directory is the repository root directory):
+`pip install .` does not build PyMOL: the compiled extensions come from Bazel, and the
+in-tree build backend stops with instructions instead of producing a wheel without them.
 
-1. Install [uv](https://docs.astral.sh/uv/) and use it to create the locked
-   project environment.
+### Prerequisites
+- [Bazelisk](https://github.com/bazelbuild/bazelisk), on `PATH` as `bazel` or `bazelisk`;
+  it fetches the Bazel version `.bazelversion` names.
+- A C++17 compiler: Visual Studio 2022 Build Tools (Windows), the Xcode command line tools
+  (macOS), or GCC with the OpenGL development headers (Linux, e.g. `mesa-libGL-devel`).
+- On Windows, Developer Mode (Settings > System > For developers), which lets Bazel create
+  the symlinks its Python tests need.
+- [uv](https://docs.astral.sh/uv/) for the development environment.
 
-2. Sync the development dependencies:
+### Build and test
+Run from the repository root:
+
+1. Sync the development environment:
     ```shell
     uv sync --locked
     ```
 
-3. Set up the build environment by running:
-    ```shell
-    ./pymake.bat setup_dev_env  # Windows
-    ./pymake.sh setup_dev_env   # macOS/Linux
-    ```
-
-4. Build the wheel file using the pre-built `_cmd` module
+2. Build this platform's wheel for the running Python (or pass `python=3.X`):
     ```shell
     ./pymake.bat build_wheel     # Windows
     ./pymake.sh build_wheel      # macOS/Linux
-   ```
-   After a successful build the wheel file can be found under the `dist/` folder.
-
-For a platform-specific native wheel build, use cibuildwheel through PyMake:
-
-```shell
-./pymake.bat build_wheels platform=windows archs=AMD64  # Windows
-./pymake.sh build_wheels                            # macOS/Linux
-```
-
-Each cibuildwheel build installs the resulting wheel in an isolated environment
-and runs the offline PyMOL test suite against both the minimum compatible NumPy 2
-and the latest NumPy 2 before producing the artifact. Mandatory coordinate and
-volume array tests must pass; missing or skipped native NumPy tests fail the
-build. The minimum is NumPy 2.2.0 for Python 3.10-3.13 and NumPy 2.3.3 for Python
-3.14. CI retains separate JUnit reports for each wheel and NumPy version, including
-failed runs. Release validation still requires all twenty Python/platform wheels
-before publication.
-
-Wheels are compiled using NumPy 2 headers from the Python build environment.
-This release requires NumPy 2 at runtime; there is no separate NumPy 1 variant.
-These checks cover headless package and NumPy interoperability, not GUI behavior
-or every operating system version.
-
-To run the packaged test suite locally, use:
-
-```shell
-./pymake.bat test  # Windows
-./pymake.sh test   # macOS/Linux
-```
-
-On a fresh checkout this generates sources, prepares vcpkg, installs the native
-extension editable, and then runs the tests under `tests/`.
-
-## From source
-The following information is about building only the `_cmd` module from source.
-
-### Prerequisites
-- CMake
-    - **Be aware**: Add the cmake to your PATH variable. Check by running `cmake --version`
-- Clang & Clang++:
-    - Xcode developer tools
-
-### Step-by-step guide
-1. Load the CMake project (e.g. in PyCharm right-click on the CMakeLists.txt file
-   and select `Load CMake Project`)
-2. Create a `Release` CMake build profile (e.g. in PyCharm click on the CMake
-   icon in the bottom left panel and click on the `Gear icon > CMake Settings`)
-3. Add the following line to your CMake build profile:
-    ```shell
-    -DCMAKE_TOOLCHAIN_FILE=$CMakeProjectDir$/vendor/vcpkg/scripts/buildsystems/vcpkg.cmake
     ```
-4. Build the project.
+    The wheel is written to `bazel-bin/tools/bazel/wheel/`. Bazel can build it directly too:
+    ```shell
+    bazel build //tools/bazel/wheel:wheel --@rules_python//python/config_settings:python_version=3.12
+    ```
+
+3. Build, install and test the wheel for the running Python:
+    ```shell
+    ./pymake.bat test  # Windows
+    ./pymake.sh test   # macOS/Linux
+    ```
+    This runs the tests under `tests/` against the installed wheel.
+
+4. Run the Bazel tests (wheel metadata and layout, generated shader headers, native import):
+    ```shell
+    bazel test //...
+    ```
+
+Machine-local Bazel options go into an ignored `user.bazelrc` at the repository root.
+
+### Release wheels
+The Build Wheels workflow builds twenty wheels: CPython 3.10 to 3.14 for Windows x64,
+macOS arm64, macOS x86_64 and Linux x86_64 (manylinux_2_28). Each wheel is repaired where
+its platform needs it (delvewheel bundles the MSVC C++ and OpenMP runtimes on Windows,
+auditwheel bundles libgomp on Linux), installed into a clean environment, and tested with
+`scripts/test_wheel.py` against both the minimum compatible NumPy 2 and the latest NumPy 2.
+Mandatory coordinate and volume array tests must pass; missing or skipped native NumPy
+tests fail the build. The minimum is NumPy 2.2.0 for Python 3.10-3.13 and NumPy 2.3.3 for
+Python 3.14. CI retains separate JUnit reports for each wheel and NumPy version, including
+failed runs. Release validation still requires all twenty Python/platform wheels before
+publication.
+
+Wheels are compiled against the NumPy 2.2 C headers of their platform and require NumPy 2
+at runtime; there is no separate NumPy 1 variant. These checks cover headless package and
+NumPy interoperability, not GUI behavior or every operating system version.
 
 ## License
 Copyright (c) [Schrodinger, LLC](https://www.schrodinger.com/)

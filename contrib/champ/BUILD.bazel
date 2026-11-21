@@ -1,4 +1,4 @@
-# The `_champ` extension (chempy.champ._champ), CMakeLists.txt's ALL_CHAMP_SRC.
+# The `_champ` extension (chempy.champ._champ), the former CMakeLists.txt's ALL_CHAMP_SRC.
 # It needs nothing beyond Python.h; its headers are included unprefixed and
 # resolve from this directory.
 

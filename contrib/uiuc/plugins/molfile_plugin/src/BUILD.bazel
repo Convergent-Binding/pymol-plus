@@ -1,5 +1,5 @@
 # VMD molfile plugin sources (see ../../LICENSE and ./LICENSE), compiled into
-# //:_cmd.so as CMakeLists.txt's ALL_SRC compiled them, here as a library of
+# //:_cmd.so as the former CMakeLists.txt's ALL_SRC compiled them, here as a library of
 # their own. CUDA (jsplugin.c, ENABLECUDATESTS), Tcl and zlib (vtfplugin.c,
 # _USE_TCL/_USE_ZLIB) are #ifdef-guarded and never defined, as in CMake.
 
