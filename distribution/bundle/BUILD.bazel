@@ -1,0 +1,42 @@
+# The app bundle: a python-build-standalone CPython 3.13 with the app's
+# packages and the in-repo PyMOL in its site-packages, and a native launcher.
+# See .opp/plans/features/app-bazel-build.md.
+
+load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("//tools/bazel:wheel_merge.bzl", "merge_wheel_files")
+
+# The packages of distribution/requirements.in in one site-packages, as pip
+# would install them: PySide6 finds shiboken6 and Qt only as real siblings.
+merge_wheel_files(
+    name = "site_packages",
+    python_version = "3.13",
+    visibility = ["//distribution:__subpackages__"],
+    wheel_files = [
+        "@app_pip//biopython:extracted_whl_files",
+        "@app_pip//msgpack:extracted_whl_files",
+        "@app_pip//numpy:extracted_whl_files",
+        "@app_pip//pmw:extracted_whl_files",
+        "@app_pip//pyside6_essentials:extracted_whl_files",
+        "@app_pip//rules:extracted_whl_files",
+        "@app_pip//shiboken6:extracted_whl_files",
+        "@app_pip//simplejson:extracted_whl_files",
+    ],
+)
+
+py_library(
+    name = "site_packages_lib",
+    testonly = True,
+    data = [":site_packages"],
+    imports = ["site_packages/site-packages"],
+)
+
+# The merged packages import on Python 3.13, PySide6 with its Qt.
+py_test(
+    name = "pyside6_import_test",
+    size = "small",
+    srcs = ["tests/pyside6_import_test.py"],
+    # No empty __init__.py in the runfiles, where one would shadow packages.
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":site_packages_lib"],
+)
