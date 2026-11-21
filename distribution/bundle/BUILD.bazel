@@ -41,6 +41,8 @@ py_test(
     name = "pyside6_import_test",
     size = "small",
     srcs = ["tests/pyside6_import_test.py"],
+    # No __pycache__ in the merged tree, which the app bundle copies.
+    env = {"PYTHONDONTWRITEBYTECODE": "1"},
     # No empty __init__.py in the runfiles, where one would shadow packages.
     legacy_create_init = False,
     python_version = "3.13",
@@ -77,7 +79,9 @@ config_setting(
     ],
 )
 
-# The app for the target platform: bazel-bin/distribution/bundle/bundle/PyMOL-Open-Source.
+# The app for the target platform, in the Python 3.13 configuration's output
+# folder (not bazel-bin); `bazel cquery --output=files //distribution/bundle`
+# prints its path.
 app_bundle(
     name = "bundle",
     distributions = [

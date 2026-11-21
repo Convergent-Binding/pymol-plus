@@ -14,49 +14,96 @@ import merge_wheel_files
 
 
 def _write(path: pathlib.Path, text: str) -> pathlib.Path:
+  """Writes a text file, with its folders.
+
+  Args:
+    path: The file.
+    text: Its contents.
+
+  Returns:
+    The path.
+  """
   path.parent.mkdir(parents=True, exist_ok=True)
   path.write_text(text, encoding="utf-8")
   return path
 
 
 class MergeWheelFilesTest(unittest.TestCase):
+  """Runs merge_wheel_files.main on files in a temporary folder."""
 
   def setUp(self) -> None:
+    """Creates the temporary folder."""
     self._dir = tempfile.TemporaryDirectory()
     self.root = pathlib.Path(self._dir.name)
     self.out = self.root / "out"
 
   def tearDown(self) -> None:
+    """Removes the temporary folder."""
     self._dir.cleanup()
 
   def test_trees_merge(self) -> None:
-    first = _write(self.root / "a" / "PySide6" / "QtCore.py", "qt")
-    second = _write(self.root / "b" / "shiboken6" / "__init__.py", "sb")
+    """Files of two wheels end up side by side in one tree."""
+    tmp_first = _write(self.root / "a" / "PySide6" / "QtCore.py", "qt")
+    tmp_second = _write(self.root / "b" / "shiboken6" / "__init__.py", "sb")
 
-    status = merge_wheel_files.main([
-        "--out", str(self.out),
-        str(first), "PySide6/QtCore.py",
-        str(second), "shiboken6/__init__.py",
-    ])
+    tmp_status = merge_wheel_files.main(
+      [
+        "--out",
+        str(self.out),
+        str(tmp_first),
+        "PySide6/QtCore.py",
+        str(tmp_second),
+        "shiboken6/__init__.py",
+      ]
+    )
 
-    self.assertEqual(status, 0)
+    self.assertEqual(tmp_status, 0)
     self.assertEqual((self.out / "PySide6" / "QtCore.py").read_text(), "qt")
     self.assertEqual((self.out / "shiboken6" / "__init__.py").read_text(), "sb")
 
+  def test_bytecode_skipped(self) -> None:
+    """Bytecode a test wrote into a wheel extraction is left out."""
+    tmp_source = _write(self.root / "a" / "pkg" / "__init__.py", "pkg")
+    tmp_bytecode = _write(
+      self.root / "a" / "pkg" / "__pycache__" / "__init__.cpython-313.pyc",
+      "pyc",
+    )
+
+    tmp_status = merge_wheel_files.main(
+      [
+        "--out",
+        str(self.out),
+        str(tmp_source),
+        "pkg/__init__.py",
+        str(tmp_bytecode),
+        "pkg/__pycache__/__init__.cpython-313.pyc",
+      ]
+    )
+
+    self.assertEqual(tmp_status, 0)
+    self.assertTrue((self.out / "pkg" / "__init__.py").is_file())
+    self.assertFalse((self.out / "pkg" / "__pycache__").exists())
+
   def test_overlapping_paths_fail(self) -> None:
-    first = _write(self.root / "a" / "common.py", "one")
-    second = _write(self.root / "b" / "common.py", "two")
+    """Two wheels shipping one path fail, naming the path."""
+    tmp_first = _write(self.root / "a" / "common.py", "one")
+    tmp_second = _write(self.root / "b" / "common.py", "two")
 
-    stderr = io.StringIO()
-    with contextlib.redirect_stderr(stderr):
-      status = merge_wheel_files.main([
-          "--out", str(self.out),
-          str(first), "common.py",
-          str(second), "common.py",
-      ])
+    tmp_stderr = io.StringIO()
+    with contextlib.redirect_stderr(tmp_stderr):
+      tmp_status = merge_wheel_files.main(
+        [
+          "--out",
+          str(self.out),
+          str(tmp_first),
+          "common.py",
+          str(tmp_second),
+          "common.py",
+        ]
+      )
 
-    self.assertNotEqual(status, 0)
-    self.assertIn("common.py", stderr.getvalue())
+    self.assertNotEqual(tmp_status, 0)
+    self.assertIn("common.py", tmp_stderr.getvalue())
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""assemble_bundle lays out the app from a runtime, packages and the PyMOL wheel.
+"""assemble_bundle lays out the app from a runtime, packages and a PyMOL wheel.
 
 The inputs are small fakes: a runtime with the Linux/macOS layout, one
 package in the merged site-packages, and a wheel with two PyMOL files.
@@ -16,186 +16,335 @@ import zipfile
 import assemble_bundle
 
 
-_METADATA = "Metadata-Version: 2.1\nName: {name}\nVersion: 1.0\nLicense-Expression: MIT\n"
+_METADATA = (
+  "Metadata-Version: 2.1\nName: {name}\nVersion: 1.0\nLicense-Expression: MIT\n"
+)
+"""A distribution's METADATA, for the name filled in."""
 
 
 def _write(path: pathlib.Path, text: str = "x") -> pathlib.Path:
+  """Writes a text file, with its folders.
+
+  Args:
+    path: The file.
+    text: Its contents.
+
+  Returns:
+    The path.
+  """
   path.parent.mkdir(parents=True, exist_ok=True)
   path.write_text(text, encoding="utf-8")
   return path
 
 
 def _add_distribution(
-    site_packages: pathlib.Path, name: str, license_text: bool, extra_licenses: tuple[str, ...] = ()
+  site_packages: pathlib.Path,
+  name: str,
+  license_text: bool,
+  extra_licenses: tuple[str, ...] = (),
 ) -> None:
-  dist_info = site_packages / f"{name}-1.0.dist-info"
-  _write(dist_info / "METADATA", _METADATA.format(name=name))
-  record = [f"{name}/__init__.py,,", f"{dist_info.name}/METADATA,,"]
+  """Installs a fake distribution: a package and its dist-info.
+
+  Args:
+    site_packages: Where it goes.
+    name: Its name, also the package's.
+    license_text: Whether its dist-info holds a LICENSE.
+    extra_licenses: More license files, relative to the dist-info folder.
+  """
+  tmp_dist_info = site_packages / f"{name}-1.0.dist-info"
+  _write(tmp_dist_info / "METADATA", _METADATA.format(name=name))
+  tmp_record = [f"{name}/__init__.py,,", f"{tmp_dist_info.name}/METADATA,,"]
   if license_text:
-    _write(dist_info / "LICENSE", "license")
-    record.append(f"{dist_info.name}/LICENSE,,")
-  for relative in extra_licenses:
-    _write(dist_info / relative, relative)
-    record.append(f"{dist_info.name}/{relative},,")
-  _write(dist_info / "RECORD", "\n".join(record) + "\n")
+    _write(tmp_dist_info / "LICENSE", "license")
+    tmp_record.append(f"{tmp_dist_info.name}/LICENSE,,")
+  for tmp_relative in extra_licenses:
+    _write(tmp_dist_info / tmp_relative, tmp_relative)
+    tmp_record.append(f"{tmp_dist_info.name}/{tmp_relative},,")
+  _write(tmp_dist_info / "RECORD", "\n".join(tmp_record) + "\n")
   _write(site_packages / name / "__init__.py")
 
 
 class AssembleBundleTest(unittest.TestCase):
+  """Runs assemble_bundle.main on fake inputs in a temporary folder."""
 
   def setUp(self) -> None:
+    """Writes the fake runtime, site-packages, wheel and other inputs."""
     self._dir = tempfile.TemporaryDirectory()
     self.root = pathlib.Path(self._dir.name)
     self.runtime = self.root / "runtime_repo"
     self.runtime_files = [
-        _write(self.runtime / "bin" / "python3", "python"),
-        _write(self.runtime / "lib" / "python3.13" / "os.py", "os"),
+      _write(self.runtime / "bin" / "python3.13", "python"),
+      _write(self.runtime / "lib" / "python3.13" / "os.py", "os"),
+      # The runtime's own pip, which the app does not ship.
+      _write(self.runtime / "bin" / "pip3", "pip"),
+      _write(
+        self.runtime
+        / "lib"
+        / "python3.13"
+        / "site-packages"
+        / "pip"
+        / "__init__.py",
+        "pip",
+      ),
     ]
+    # python-build-standalone's bin/python3 is a symlink on Linux and macOS.
+    tmp_python3 = self.runtime / "bin" / "python3"
+    try:
+      tmp_python3.symlink_to("python3.13")
+    except OSError:
+      # Windows without the privilege to create symlinks
+      _write(tmp_python3, "python")
+    self.runtime_files.append(tmp_python3)
     self.site_packages = self.root / "merged" / "site-packages"
     _add_distribution(self.site_packages, "fakepkg", license_text=True)
-    self.wheel = self.root / "pymol_open_source_whl-3.2.0.3-cp313-cp313-linux_x86_64.whl"
-    with zipfile.ZipFile(self.wheel, "w") as wheel:
-      wheel.writestr("pymol/__init__.py", "pymol")
-      wheel.writestr("pmg_qt/pymol_qt_gui.py", "original")
-      dist_info = "pymol_open_source_whl-3.2.0.3.dist-info"
-      wheel.writestr(f"{dist_info}/METADATA", _METADATA.format(name="pymol-open-source-whl"))
-      wheel.writestr(f"{dist_info}/LICENSE", "pymol license")
-      wheel.writestr(
-          f"{dist_info}/RECORD",
-          f"pymol/__init__.py,,\n{dist_info}/METADATA,,\n{dist_info}/LICENSE,,\n",
+    # Bytecode a test wrote into the merged tree; it records build paths.
+    _write(
+      self.site_packages
+      / "fakepkg"
+      / "__pycache__"
+      / "__init__.cpython-313.pyc",
+      "pyc",
+    )
+    self.wheel = (
+      self.root / "pymol_open_source_whl-3.2.0.3-cp313-cp313-linux_x86_64.whl"
+    )
+    with zipfile.ZipFile(self.wheel, "w") as tmp_wheel:
+      tmp_wheel.writestr("pymol/__init__.py", "pymol")
+      tmp_wheel.writestr("pmg_qt/pymol_qt_gui.py", "original")
+      tmp_dist_info = "pymol_open_source_whl-3.2.0.3.dist-info"
+      tmp_wheel.writestr(
+        f"{tmp_dist_info}/METADATA",
+        _METADATA.format(name="pymol-open-source-whl"),
+      )
+      tmp_wheel.writestr(f"{tmp_dist_info}/LICENSE", "pymol license")
+      tmp_wheel.writestr(
+        f"{tmp_dist_info}/RECORD",
+        f"pymol/__init__.py,,\n{tmp_dist_info}/METADATA,,\n"
+        f"{tmp_dist_info}/LICENSE,,\n",
       )
     self.overlay = _write(self.root / "edited" / "pymol_qt_gui.py", "edited")
     self.launcher = _write(self.root / "PyMOL-Open-Source", "launcher")
-    licenses = self.root / "licenses"
+    tmp_licenses = self.root / "licenses"
     self.license_files = {
-        name: _write(licenses / name, name)
-        for name in ("THIRD-PARTY-NOTICES.txt", "GPL-3.0.txt", "LGPL-3.0.txt")
+      tmp_name: _write(tmp_licenses / tmp_name, tmp_name)
+      for tmp_name in ("THIRD-PARTY-NOTICES.txt", "GPL-3.0.txt", "LGPL-3.0.txt")
     }
     self.project_license = _write(self.root / "LICENSE", "bsd")
-    self.python_license = _write(self.root / "python_license" / "LICENSE.txt", "psf")
-    self.pyproject = _write(self.root / "pyproject.toml", '[project]\nversion = "3.2.0.3+1"\n')
+    self.python_license = _write(
+      self.root / "python_license" / "LICENSE.txt", "psf"
+    )
+    self.pyproject = _write(
+      self.root / "pyproject.toml", '[project]\nversion = "3.2.0.3+1"\n'
+    )
     self.lock = _write(self.root / "requirements_lock.txt", "fakepkg==1.0\n")
-    self.status = _write(self.root / "stable-status.txt", "STABLE_GIT_SHA abc123\nSTABLE_BUILD_DATE 0\n")
+    self.status = _write(
+      self.root / "stable-status.txt",
+      "STABLE_GIT_SHA abc123\nSTABLE_BUILD_DATE 0\n",
+    )
 
   def tearDown(self) -> None:
+    """Removes the temporary folder."""
     self._dir.cleanup()
 
   def _assemble(self, out: pathlib.Path, *extra: str) -> tuple[int, str]:
-    argv = [
-        "--out", str(out),
-        "--runtime-root", str(self.runtime),
-        *[arg for path in self.runtime_files for arg in ("--runtime-file", str(path))],
-        "--site-packages", str(self.site_packages),
-        "--wheel", str(self.wheel),
-        "--overlay", f"{self.overlay}=pmg_qt/pymol_qt_gui.py",
-        "--launcher", str(self.launcher),
-        *[arg for name, path in self.license_files.items() for arg in ("--license", f"{path}={name}")],
-        "--project-license", str(self.project_license),
-        "--python-license", str(self.python_license),
-        "--distribution", "pymol-open-source-whl",
-        "--distribution", "fakepkg",
-        "--pyproject", str(self.pyproject),
-        "--lock", str(self.lock),
-        "--status-file", str(self.status),
-        "--target", "linux-x86_64",
-        "--python-version", "3.13",
-        *extra,
+    """Assembles the fake inputs.
+
+    Args:
+      out: The app folder to write.
+      *extra: More arguments.
+
+    Returns:
+      main's exit status and what it wrote to stderr.
+    """
+    tmp_argv = [
+      "--out",
+      str(out),
+      "--runtime-root",
+      str(self.runtime),
+      *[
+        tmp_arg
+        for tmp_path in self.runtime_files
+        for tmp_arg in ("--runtime-file", str(tmp_path))
+      ],
+      "--site-packages",
+      str(self.site_packages),
+      "--wheel",
+      str(self.wheel),
+      "--overlay",
+      f"{self.overlay}=pmg_qt/pymol_qt_gui.py",
+      "--launcher",
+      str(self.launcher),
+      *[
+        tmp_arg
+        for tmp_name, tmp_path in self.license_files.items()
+        for tmp_arg in ("--license", f"{tmp_path}={tmp_name}")
+      ],
+      "--project-license",
+      str(self.project_license),
+      "--python-license",
+      str(self.python_license),
+      "--distribution",
+      "pymol-open-source-whl",
+      "--distribution",
+      "fakepkg",
+      "--pyproject",
+      str(self.pyproject),
+      "--lock",
+      str(self.lock),
+      "--status-file",
+      str(self.status),
+      "--target",
+      "linux-x86_64",
+      "--python-version",
+      "3.13",
+      *extra,
     ]
-    stderr = io.StringIO()
-    with contextlib.redirect_stderr(stderr):
-      status = assemble_bundle.main(argv)
-    return status, stderr.getvalue()
+    tmp_stderr = io.StringIO()
+    with contextlib.redirect_stderr(tmp_stderr):
+      tmp_status = assemble_bundle.main(tmp_argv)
+    return tmp_status, tmp_stderr.getvalue()
 
   def test_layout(self) -> None:
-    out = self.root / "out"
+    """The launcher, runtime, packages, licenses and manifest are in place."""
+    tmp_out = self.root / "out"
 
-    status, stderr = self._assemble(out)
+    tmp_status, tmp_stderr = self._assemble(tmp_out)
 
-    self.assertEqual(status, 0, stderr)
-    site_packages = out / "runtime" / "lib" / "python3.13" / "site-packages"
-    for path in (
-        out / "PyMOL-Open-Source",
-        out / "runtime" / "bin" / "python3",
-        site_packages / "fakepkg" / "__init__.py",
-        site_packages / "pymol" / "__init__.py",
-        out / "licenses" / "README.txt",
-        out / "licenses" / "pymol-open-source-whl" / "LICENSE",
-        out / "licenses" / "Python" / "LICENSE.txt",
-        out / "licenses" / "PyMOL-Open-Source-setup" / "LICENSE",
-        out / "manifest.json",
+    self.assertEqual(tmp_status, 0, tmp_stderr)
+    tmp_site_packages = (
+      tmp_out / "runtime" / "lib" / "python3.13" / "site-packages"
+    )
+    for tmp_path in (
+      tmp_out / "PyMOL-Open-Source",
+      tmp_out / "runtime" / "bin" / "python3",
+      tmp_site_packages / "fakepkg" / "__init__.py",
+      tmp_site_packages / "pymol" / "__init__.py",
+      tmp_out / "licenses" / "README.txt",
+      tmp_out / "licenses" / "pymol-open-source-whl" / "LICENSE",
+      tmp_out / "licenses" / "Python" / "LICENSE.txt",
+      tmp_out / "licenses" / "PyMOL-Open-Source-setup" / "LICENSE",
+      tmp_out / "manifest.json",
     ):
-      self.assertTrue(path.is_file(), path)
-    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
-    self.assertEqual(manifest["app_version"], "3.2.0.3+1")
-    self.assertEqual(manifest["git_commit"], "abc123")
-    self.assertEqual(manifest["pymol_wheel"], self.wheel.name)
+      self.assertTrue(tmp_path.is_file(), tmp_path)
+    tmp_manifest = json.loads(
+      (tmp_out / "manifest.json").read_text(encoding="utf-8")
+    )
+    self.assertEqual(tmp_manifest["app_version"], "3.2.0.3+1")
+    self.assertEqual(tmp_manifest["git_commit"], "abc123")
+    self.assertEqual(tmp_manifest["pymol_wheel"], self.wheel.name)
 
   def test_overlay_replaces_wheel_file(self) -> None:
-    out = self.root / "out"
+    """An overlay wins over the wheel's file of the same path."""
+    tmp_out = self.root / "out"
 
-    self._assemble(out)
+    self._assemble(tmp_out)
 
-    gui = out / "runtime" / "lib" / "python3.13" / "site-packages" / "pmg_qt" / "pymol_qt_gui.py"
-    self.assertEqual(gui.read_text(encoding="utf-8"), "edited")
+    tmp_gui = (
+      tmp_out
+      / "runtime"
+      / "lib"
+      / "python3.13"
+      / "site-packages"
+      / "pmg_qt"
+      / "pymol_qt_gui.py"
+    )
+    self.assertEqual(tmp_gui.read_text(encoding="utf-8"), "edited")
 
   def test_missing_license_fails(self) -> None:
+    """A bundled distribution without a license text stops the build."""
     _add_distribution(self.site_packages, "nolicense", license_text=False)
-    out = self.root / "out"
+    tmp_out = self.root / "out"
 
-    status, stderr = self._assemble(out, "--distribution", "nolicense")
+    tmp_status, tmp_stderr = self._assemble(
+      tmp_out, "--distribution", "nolicense"
+    )
 
-    self.assertNotEqual(status, 0)
-    self.assertIn("nolicense", stderr)
+    self.assertNotEqual(tmp_status, 0)
+    self.assertIn("nolicense", tmp_stderr)
 
   def test_license_files_with_same_name_kept(self) -> None:
-    # PEP 639 puts license files under dist-info/licenses/, keeping the
-    # source tree's folders; numpy ships several LICENSE.txt files there.
+    """License files of one name in different folders all survive.
+
+    PEP 639 puts license files under dist-info/licenses/, keeping the
+    source tree's folders; numpy ships several LICENSE.txt files there.
+    """
     _add_distribution(
-        self.site_packages,
-        "manylicenses",
-        license_text=False,
-        extra_licenses=("licenses/LICENSE.txt", "licenses/vendored/lib/LICENSE.txt"),
-    )
-    out = self.root / "out"
-
-    status, stderr = self._assemble(out, "--distribution", "manylicenses")
-
-    self.assertEqual(status, 0, stderr)
-    licenses = out / "licenses" / "manylicenses"
-    self.assertEqual((licenses / "LICENSE.txt").read_text(encoding="utf-8"), "licenses/LICENSE.txt")
-    self.assertEqual(
-        (licenses / "vendored" / "lib" / "LICENSE.txt").read_text(encoding="utf-8"),
+      self.site_packages,
+      "manylicenses",
+      license_text=False,
+      extra_licenses=(
+        "licenses/LICENSE.txt",
         "licenses/vendored/lib/LICENSE.txt",
+      ),
+    )
+    tmp_out = self.root / "out"
+
+    tmp_status, tmp_stderr = self._assemble(
+      tmp_out, "--distribution", "manylicenses"
+    )
+
+    self.assertEqual(tmp_status, 0, tmp_stderr)
+    tmp_licenses = tmp_out / "licenses" / "manylicenses"
+    self.assertEqual(
+      (tmp_licenses / "LICENSE.txt").read_text(encoding="utf-8"),
+      "licenses/LICENSE.txt",
+    )
+    self.assertEqual(
+      (tmp_licenses / "vendored" / "lib" / "LICENSE.txt").read_text(
+        encoding="utf-8"
+      ),
+      "licenses/vendored/lib/LICENSE.txt",
     )
 
   def test_read_only_inputs(self) -> None:
-    # Bazel's inputs are read-only; the copies must stay writable to Bazel.
-    for path in self.license_files.values():
-      path.chmod(0o444)
-    out = self.root / "out"
+    """Read-only inputs, as Bazel's are, still assemble."""
+    for tmp_path in self.license_files.values():
+      tmp_path.chmod(0o444)
+    tmp_out = self.root / "out"
 
-    status, stderr = self._assemble(out)
+    tmp_status, tmp_stderr = self._assemble(tmp_out)
 
-    self.assertEqual(status, 0, stderr)
+    self.assertEqual(tmp_status, 0, tmp_stderr)
 
   def test_manifest_is_deterministic(self) -> None:
-    first, second = self.root / "first", self.root / "second"
+    """Equal inputs give a byte-identical manifest.json."""
+    tmp_first, tmp_second = self.root / "first", self.root / "second"
 
-    self._assemble(first)
-    self._assemble(second)
+    self._assemble(tmp_first)
+    self._assemble(tmp_second)
 
     self.assertEqual(
-        (first / "manifest.json").read_bytes(), (second / "manifest.json").read_bytes()
+      (tmp_first / "manifest.json").read_bytes(),
+      (tmp_second / "manifest.json").read_bytes(),
+    )
+
+  def test_bytecode_and_pip_left_out(self) -> None:
+    """Neither bytecode nor the runtime's own pip reaches the app."""
+    tmp_out = self.root / "out"
+
+    tmp_status, tmp_stderr = self._assemble(tmp_out)
+
+    self.assertEqual(tmp_status, 0, tmp_stderr)
+    self.assertEqual(list(tmp_out.rglob("__pycache__")), [])
+    self.assertEqual(list(tmp_out.rglob("*.pyc")), [])
+    self.assertFalse((tmp_out / "runtime" / "bin" / "pip3").exists())
+    self.assertFalse(
+      (
+        tmp_out / "runtime" / "lib" / "python3.13" / "site-packages" / "pip"
+      ).exists()
     )
 
   def test_no_symlinks(self) -> None:
-    out = self.root / "out"
+    """The app holds no symlinks, though the runtime's bin/python3 is one."""
+    tmp_out = self.root / "out"
 
-    self._assemble(out)
+    self._assemble(tmp_out)
 
-    for directory, subdirectories, files in os.walk(out):
-      for name in subdirectories + files:
-        self.assertFalse(os.path.islink(os.path.join(directory, name)), name)
+    for tmp_directory, tmp_subdirectories, tmp_files in os.walk(tmp_out):
+      for tmp_name in tmp_subdirectories + tmp_files:
+        self.assertFalse(
+          os.path.islink(os.path.join(tmp_directory, tmp_name)), tmp_name
+        )
 
 
 if __name__ == "__main__":
