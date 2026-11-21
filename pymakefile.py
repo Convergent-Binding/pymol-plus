@@ -376,7 +376,6 @@ def _main() -> None:
 
 # <editor-fold desc="Tasks">
 _PROJECT_ROOT = pathlib.Path(__file__).resolve().parent
-_WHEEL_DIR = _PROJECT_ROOT / "bazel-bin" / "tools" / "bazel" / "wheel"
 
 
 def _running_python_version() -> str:
@@ -402,19 +401,24 @@ def _build_wheel_for(python: str) -> pathlib.Path:
       python: A ``major.minor`` version registered in MODULE.bazel.
 
   Returns:
-      The built wheel under ``bazel-bin/tools/bazel/wheel``.
+      The built wheel, as Bazel reports it. The wheel directory may also hold
+      wheels of other versions or platforms from earlier builds, so the path
+      is asked of Bazel rather than globbed.
   """
-  run(
-    f"{_bazel()} build "
+  target = (
     f"--@rules_python//python/config_settings:python_version={python} "
-    "//tools/bazel/wheel:wheel",
+    "//tools/bazel/wheel:wheel"
+  )
+  run(f"{_bazel()} build {target}", cwd=_PROJECT_ROOT)
+  files = run(
+    f"{_bazel()} cquery --output=files {target}",
+    capture=True,
     cwd=_PROJECT_ROOT,
   )
-  python_tag = "cp" + python.replace(".", "")
-  wheels = sorted(_WHEEL_DIR.glob(f"*-{python_tag}-{python_tag}-*.whl"))
+  wheels = [line for line in files.splitlines() if line.endswith(".whl")]
   if len(wheels) != 1:
-    raise RuntimeError(f"Expected one {python_tag} wheel in {_WHEEL_DIR}, found {wheels}")
-  return wheels[0]
+    raise RuntimeError(f"Expected Bazel to report one wheel, got {wheels}")
+  return _PROJECT_ROOT / wheels[0]
 
 
 @task

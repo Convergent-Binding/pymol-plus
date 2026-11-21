@@ -9,7 +9,10 @@
 # One wheel target per OS, because each stages the extensions it compiled under
 # that OS's file names; building one on another OS would mislabel its binaries.
 # :wheel picks the host's and fails at analysis on any other OS or CPU rather
-# than producing a mislabelled wheel. Release CI repairs the Linux wheel with
+# than producing a mislabelled wheel. The per-OS targets are `manual`, so
+# `bazel build //...` and `bazel test //...` build only the host's wheel (through
+# :wheel) and do not analyse the others, whose platform select()s have no
+# branch for, e.g., an arm64 Mac. Release CI repairs the Linux wheel with
 # auditwheel (which retags linux_x86_64 as manylinux_2_28_x86_64 and bundles
 # libgomp) and the Windows wheel with delvewheel (which bundles the MSVC C++ and
 # OpenMP runtimes), as cibuildwheel did.
@@ -84,6 +87,8 @@ py_wheel(
     requires = DEPENDENCIES,
     strip_path_prefixes = _STRIP_PATH_PREFIXES,
     summary = DESCRIPTION,
+    # Only :wheel picks one for the host; see the note at the top.
+    tags = ["manual"],
     version = VERSION,
     deps = [":pkg_macos"],
 )
@@ -108,6 +113,8 @@ py_wheel(
     requires = DEPENDENCIES,
     strip_path_prefixes = _STRIP_PATH_PREFIXES,
     summary = DESCRIPTION,
+    # Only :wheel picks one for the host; see the note at the top.
+    tags = ["manual"],
     version = VERSION,
     deps = [":pkg_linux"],
 )
@@ -129,6 +136,8 @@ py_wheel(
     requires = DEPENDENCIES,
     strip_path_prefixes = _STRIP_PATH_PREFIXES,
     summary = DESCRIPTION,
+    # Only :wheel picks one for the host; see the note at the top.
+    tags = ["manual"],
     version = VERSION,
     deps = [":pkg_windows"],
 )
