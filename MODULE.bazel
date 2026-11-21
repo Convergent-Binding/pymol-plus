@@ -41,3 +41,88 @@ python.toolchain(python_version = "3.11")
 python.toolchain(python_version = "3.12")
 python.toolchain(python_version = "3.13")
 python.toolchain(python_version = "3.14")
+
+# Native libraries from the Bazel Central Registry that //:_cmd.so links.
+bazel_dep(name = "freetype", version = "2.14.1")  # FTL (or GPLv2, not used)
+bazel_dep(name = "glew", version = "2.3.1")  # Modified BSD
+bazel_dep(name = "libpng", version = "1.6.58")  # PNG Reference Library License v2
+bazel_dep(name = "libxml2", version = "2.15.3")  # MIT
+bazel_dep(name = "glm", version = "1.0.3")  # Happy Bunny License (Modified MIT) / MIT
+
+# netCDF links zlib unconditionally, even with NetCDF-4 off. Declared
+# explicitly, at the version libpng already resolves, so a bare Windows runner
+# (which has no system zlib) does not fail netCDF's CMake configure.
+bazel_dep(name = "zlib", version = "1.3.1.bcr.8")  # zlib License
+
+# netCDF-C is not on the registry, so it is built from its own CMake project
+# with rules_foreign_cc. Release 0.15.1 always bootstraps pkg-config by
+# compiling glib from source, which fails under MSVC
+# (bazel-contrib/rules_foreign_cc#1198); the pinned commit lets the root
+# module choose a system pkg-config instead.
+bazel_dep(name = "rules_foreign_cc", version = "0.15.1")
+archive_override(
+    module_name = "rules_foreign_cc",
+    integrity = "sha256-fwXrnMSxxgDGQ+aSIciCAyRMytx1rijErelg8PB0LyY=",
+    strip_prefix = "rules_foreign_cc-f68b351c4691e747f889dc5e4c2cac3cd3b66ea2",
+    urls = ["https://github.com/bazel-contrib/rules_foreign_cc/archive/f68b351c4691e747f889dc5e4c2cac3cd3b66ea2.tar.gz"],
+)
+
+foreign_cc_tools = use_extension("@rules_foreign_cc//foreign_cc:extensions.bzl", "tools")
+foreign_cc_tools.cmake(mode = "binary", version = "3.29.x")
+foreign_cc_tools.ninja(mode = "binary", version = "1.12.1")
+
+# netCDF's CMake configure only probes for pkg-config and never needs it with
+# the features third_party/netcdf turns off; "system" satisfies toolchain
+# resolution without building glib.
+foreign_cc_tools.pkgconfig(mode = "system")
+
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# netCDF-C 4.10.1 (BSD-3-Clause-style), classic API only: that is all
+# netcdfplugin.c calls, and it avoids a transitive HDF5 build.
+http_archive(
+    name = "netcdf_c",
+    build_file = "//third_party/netcdf:BUILD.netcdf.bazel",
+    sha256 = "33c27231c478c3b35da7c7758fbdd02da1fe407abcb16ddfe195f69d164f930d",
+    strip_prefix = "netcdf-c-4.10.1",
+    url = "https://github.com/Unidata/netcdf-c/archive/refs/tags/v4.10.1.tar.gz",
+)
+
+# NumPy 2.2.6 C-API headers (BSD-3-Clause), one set per wheel platform:
+# _numpyconfig.h is generated per platform (NPY_SIZEOF_LONG is 4 on Windows and
+# 8 elsewhere), so one platform's headers must not be compiled into another's
+# extension. 2.2 is the runtime floor's series (numpy>=2.2), so no newer C API
+# can be used by accident. The headers do not depend on the Python version;
+# the cp312 wheels are taken for all of them. //third_party/numpy:headers
+# selects the right one.
+http_archive(
+    name = "numpy_headers_win_amd64",
+    build_file = "//third_party/numpy:BUILD.numpy.bazel",
+    sha256 = "c1f9540be57940698ed329904db803cf7a402f3fc200bfe599334c9bd84a40b2",
+    type = "zip",
+    url = "https://files.pythonhosted.org/packages/36/fa/8c9210162ca1b88529ab76b41ba02d433fd54fecaf6feb70ef9f124683f1/numpy-2.2.6-cp312-cp312-win_amd64.whl",
+)
+
+http_archive(
+    name = "numpy_headers_macos_x86_64",
+    build_file = "//third_party/numpy:BUILD.numpy.bazel",
+    sha256 = "41c5a21f4a04fa86436124d388f6ed60a9343a6f767fced1a8a71c3fbca038ff",
+    type = "zip",
+    url = "https://files.pythonhosted.org/packages/82/5d/c00588b6cf18e1da539b45d3598d3557084990dcc4331960c15ee776ee41/numpy-2.2.6-cp312-cp312-macosx_10_13_x86_64.whl",
+)
+
+http_archive(
+    name = "numpy_headers_macos_arm64",
+    build_file = "//third_party/numpy:BUILD.numpy.bazel",
+    sha256 = "de749064336d37e340f640b05f24e9e3dd678c57318c7289d222a8a2f543e90c",
+    type = "zip",
+    url = "https://files.pythonhosted.org/packages/66/ee/560deadcdde6c2f90200450d5938f63a34b37e27ebff162810f716f6a230/numpy-2.2.6-cp312-cp312-macosx_11_0_arm64.whl",
+)
+
+http_archive(
+    name = "numpy_headers_linux_x86_64",
+    build_file = "//third_party/numpy:BUILD.numpy.bazel",
+    sha256 = "fd83c01228a688733f1ded5201c678f0c53ecc1006ffbc404db9f7a899ac6249",
+    type = "zip",
+    url = "https://files.pythonhosted.org/packages/8c/3d/1e1db36cfd41f895d266b103df00ca5b3cbe965184df824dec5c08c6b803/numpy-2.2.6-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+)

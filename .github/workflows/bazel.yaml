@@ -1,0 +1,128 @@
+#A* -------------------------------------------------------------------
+#B* This file contains source code for running a GitHub automation
+#-* related to the build process of the PyMOL computer program
+#C* Copyright 2026 by Martin Urban.
+#D* -------------------------------------------------------------------
+#E* It is unlawful to modify or remove this copyright notice.
+#F* -------------------------------------------------------------------
+#G* Please see the accompanying LICENSE file for further information.
+#H* -------------------------------------------------------------------
+#I* Additional authors of this source file include:
+#-*
+#-*
+#-*
+#Z* -------------------------------------------------------------------
+name: Bazel
+
+# Builds every Bazel target and runs every Bazel test on the four wheel
+# platforms, with the default (3.10) toolchain. Build Wheels (wheels.yaml)
+# builds the full Python matrix; this is the faster per-change check.
+on:
+  pull_request:
+    branches: [production]
+    paths-ignore:
+      # The ready-to-run app and its workflows and settings
+      - 'distribution/**'
+      - '.github/workflows/build_app.yaml'
+      - '.github/workflows/docs.yaml'
+      - '.github/workflows/dependabot_automerge.yaml'
+      - '.github/dependabot.yml'
+      - '.github/release.yml'
+      - '.github/ISSUE_TEMPLATE/**'
+      # Documentation and AI tooling
+      - 'docs/**'
+      - '**/*.md'
+      - '.agents/**'
+      - '.opencode/**'
+      - '.mailmap'
+  workflow_dispatch:
+
+# A newer push to a pull request cancels its outdated run
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    name: GNU/Linux (x86_64)
+    runs-on: ubuntu-22.04
+    # PyPA's manylinux image, the one the release wheels are built in, so this
+    # check sees the same compiler and glibc.
+    container: quay.io/pypa/manylinux_2_28_x86_64
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The checkout belongs to another user than the container's root, and
+      # git refuses such a repository; the build-info header's git SHA comes
+      # from `git rev-parse HEAD` (tools/bazel/workspace_status.sh).
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      # The image ships no bazel; bazelisk honours .bazelversion.
+      - name: Install bazelisk
+        run: |
+          curl -fsSL -o /usr/local/bin/bazel \
+            https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazel
+          bazel --version
+
+      - name: Install OpenGL development headers
+        run: dnf install -y mesa-libGL-devel
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
+
+      - name: Build
+        run: bazel build //...
+
+      - name: Test
+        run: bazel test //... --test_output=errors
+
+  macos:
+    name: macOS (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15-intel, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}-${{ matrix.os }}
+
+      - name: Build
+        run: bazel build //...
+
+      - name: Test
+        run: bazel test //... --test_output=errors
+
+  windows:
+    name: Windows (x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
+
+      - name: Build
+        run: bazel build //...
+
+      - name: Test
+        run: bazel test //... --test_output=errors
