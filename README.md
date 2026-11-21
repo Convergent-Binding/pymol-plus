@@ -1,8 +1,5 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/pymolplus-logo-loop-black.svg">
-    <img src="assets/logo/pymolplus-logo-loop-beige.svg" alt="PyMOL+: a tryptophan in a peptide chain is drawn stick by stick, then PyMOL and a plus appear beside it" width="100%">
-  </picture>
+  <img src="assets/logo/pymolplus-logo-loop-red.svg" alt="PyMOL+: a tryptophan in a peptide chain is drawn stick by stick, then PyMOL and a plus appear beside it" width="100%">
 </p>
 
 # Unofficial PyMOL(TM) Python wheel files
