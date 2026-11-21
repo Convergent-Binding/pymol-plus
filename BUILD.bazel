@@ -10,8 +10,10 @@ load(
 
 # pyproject.toml is read by //tools/bazel/tests:pyproject_metadata_test, which
 # holds the Starlark reading of it (//tools/bazel:pyproject_repo.bzl) to
-# CPython's tomllib. README.md and LICENSE go into the wheel's metadata.
+# CPython's tomllib. README.md, LICENSE and AUTHORS go into the wheel's
+# metadata.
 exports_files([
+    "AUTHORS",
     "LICENSE",
     "README.md",
     "pyproject.toml",
