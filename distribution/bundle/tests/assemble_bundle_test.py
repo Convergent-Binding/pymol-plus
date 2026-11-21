@@ -15,6 +15,7 @@ import zipfile
 
 import assemble_bundle
 
+
 _METADATA = "Metadata-Version: 2.1\nName: {name}\nVersion: 1.0\nLicense-Expression: MIT\n"
 
 

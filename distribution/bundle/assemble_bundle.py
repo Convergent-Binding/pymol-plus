@@ -26,6 +26,7 @@ import sys
 import tomllib
 import zipfile
 
+
 # Distributions whose metadata contains no license text, and where it is.
 # The Qt for Python texts are among the --license files; Pmw's is a pattern
 # relative to its installed package, so a Pmw update keeps working.

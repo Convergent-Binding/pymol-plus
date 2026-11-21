@@ -11,6 +11,7 @@ import hashlib
 import pathlib
 import unittest
 
+
 _EDITED = pathlib.Path("distribution/edited")
 _MODULES = pathlib.Path("modules")
 

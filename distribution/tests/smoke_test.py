@@ -49,15 +49,26 @@ def check_bundled_modules_and_data() -> None:
 
 
 def check_licenses() -> None:
-  """The license texts must be shipped next to the executable (macOS: in Resources)."""
+  """The license texts must be shipped with the app.
+
+  The Bazel-built app keeps them in the folder its launcher sets as
+  PYMOL_APP_ROOT; the cx_Freeze app next to the executable (macOS: in
+  Resources).
+  """
+  app_root = os.environ.get("PYMOL_APP_ROOT")
   exe_dir = pathlib.Path(os.path.realpath(sys.executable)).parent
-  candidates = (exe_dir / "licenses", exe_dir.parent / "Resources" / "licenses")
+  if app_root:
+    candidates = (pathlib.Path(app_root) / "licenses",)
+  else:
+    candidates = (exe_dir / "licenses", exe_dir.parent / "Resources" / "licenses")
   licenses_dir = next((d for d in candidates if d.is_dir()), None)
-  assert licenses_dir is not None, f"licenses folder missing next to {exe_dir}"
+  assert licenses_dir is not None, f"licenses folder missing in {candidates[0].parent}"
   for tmp_name in ("README.txt", "THIRD-PARTY-NOTICES.txt", "pymol-open-source-whl/LICENSE",
                    "LGPL-3.0.txt", "PySide6_Essentials/LGPL-3.0.txt", "Python/LICENSE.txt"):
     assert (licenses_dir / tmp_name).is_file(), f"license file missing: {tmp_name}"
-  if sys.platform == "win32":
+  # The Bazel-built app gets the C++ runtime and its license in a later step
+  # (.opp/plans/features/app-bazel-build.md, step 2).
+  if sys.platform == "win32" and not app_root:
     assert (exe_dir / "share" / "licenses" / "vc_redist").is_dir(), "license of the C++ runtime missing"
 
 

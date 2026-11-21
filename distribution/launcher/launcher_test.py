@@ -15,6 +15,7 @@ import sys
 import tempfile
 import unittest
 
+
 _LAUNCHER, _FAKE_PYTHON = (pathlib.Path(arg) for arg in sys.argv[1:3])
 _WINDOWS = sys.platform == "win32"
 _LAUNCHER_NAME = "PyMOL-Open-Source.exe" if _WINDOWS else "PyMOL-Open-Source"

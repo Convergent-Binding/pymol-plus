@@ -16,14 +16,16 @@ name: Bazel
 
 # Builds every Bazel target and runs every Bazel test on the four wheel
 # platforms, with the default (3.10) toolchain: the wheel check of every pull
-# request. Build Wheels (wheels.yaml) builds the full Python matrix only before
-# a release, on release-stage/ branches and v* tags.
+# request, and the check of the Bazel-built app (//distribution/..., Python
+# 3.13), which runs headless from a moved copy. Build Wheels (wheels.yaml)
+# builds the full Python matrix only before a release, on release-stage/
+# branches and v* tags.
 on:
   pull_request:
     branches: [production]
     paths-ignore:
-      # The ready-to-run app and its workflows and settings
-      - 'distribution/**'
+      # The app's website and the workflows and settings of the app's releases
+      - 'distribution/docs/**'
       - '.github/workflows/build_app.yaml'
       - '.github/workflows/docs.yaml'
       - '.github/workflows/dependabot_automerge.yaml'
