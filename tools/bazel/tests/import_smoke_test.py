@@ -6,7 +6,6 @@ wheel. A link error, a missing data file PyMOL reads at start-up, or a build
 info header without its git SHA fails here.
 """
 
-import re
 import unittest
 
 from pymol2 import PyMOL

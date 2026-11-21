@@ -33,7 +33,7 @@ class GeneratedHeadersTest(unittest.TestCase):
   def setUpClass(cls) -> None:
     cls.shader_text = _by_name(_GENERATED, "ShaderText.cpp").read_text()
     cls.build_info = _by_name(_GENERATED, "PyMOLBuildInfo.h").read_text()
-    cls.cached = set(re.findall(r'^"([^"\\]+)", ""$', cls.shader_text, re.M))
+    cls.cached = set(re.findall(r'^"([^"\\]+)", ""$', cls.shader_text, re.MULTILINE))
 
   def test_every_shader_file_is_cached(self) -> None:
     shaders = {p.name for p in _SHADER_SRCS if p.suffix in _SHADER_SUFFIXES}
@@ -41,7 +41,7 @@ class GeneratedHeadersTest(unittest.TestCase):
     self.assertEqual(shaders - self.cached, set())
 
   def test_every_file_include_names_a_cached_shader(self) -> None:
-    included = set(re.findall(r'^"#include (\S+)\\n"$', self.shader_text, re.M))
+    included = set(re.findall(r'^"#include (\S+)\\n"$', self.shader_text, re.MULTILINE))
     files = {name for name in included if name.endswith(_SHADER_SUFFIXES)}
     self.assertTrue(files)
     self.assertEqual(files - self.cached, set())

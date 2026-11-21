@@ -82,3 +82,11 @@ py_test(
     ],
     data = ["//tools/bazel/wheel:wheel"],
 )
+
+# pyproject.toml's in-tree build backend refuses to build with pip.
+py_test(
+    name = "build_backend_test",
+    size = "small",
+    srcs = ["build_backend_test.py"],
+    deps = ["//tools/build_backend"],
+)

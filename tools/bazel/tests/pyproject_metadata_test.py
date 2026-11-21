@@ -8,8 +8,9 @@ the hand-written reader honest.
 
 import json
 import sys
-import tomllib
 import unittest
+
+import tomllib
 
 _METADATA_JSON, _PYPROJECT = sys.argv[1:3]
 
