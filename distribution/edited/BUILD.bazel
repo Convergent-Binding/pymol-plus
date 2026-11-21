@@ -4,6 +4,11 @@
 
 load("@rules_python//python:defs.bzl", "py_test")
 
+exports_files(
+    glob(["**/*.py"]),
+    visibility = ["//distribution:__subpackages__"],
+)
+
 filegroup(
     name = "overlays",
     srcs = glob(["**/*.py"]),

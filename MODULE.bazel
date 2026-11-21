@@ -43,8 +43,41 @@ python.toolchain(python_version = "3.13")
 python.toolchain(python_version = "3.14")
 
 # The app bundles the 3.13 runtime itself (python-build-standalone, the files
-# of @python_3_13//:files); see //distribution/bundle.
-use_repo(python, "python_3_13")
+# of @python_3_13//:files) and its license text; see //distribution/bundle.
+use_repo(
+    python,
+    "python_3_13",
+    "python_3_13_aarch64-apple-darwin",
+    "python_3_13_x86_64-apple-darwin",
+    "python_3_13_x86_64-pc-windows-msvc",
+    "python_3_13_x86_64-unknown-linux-gnu",
+)
+
+python_license = use_repo_rule("//tools/bazel:python_license.bzl", "python_license")
+
+python_license(
+    name = "python_3_13_license_macos_arm64",
+    interpreter = "@python_3_13_aarch64-apple-darwin//:python",
+    python_version = "3.13",
+)
+
+python_license(
+    name = "python_3_13_license_macos_x86_64",
+    interpreter = "@python_3_13_x86_64-apple-darwin//:python",
+    python_version = "3.13",
+)
+
+python_license(
+    name = "python_3_13_license_windows_x86_64",
+    interpreter = "@python_3_13_x86_64-pc-windows-msvc//:python",
+    python_version = "3.13",
+)
+
+python_license(
+    name = "python_3_13_license_linux_x86_64",
+    interpreter = "@python_3_13_x86_64-unknown-linux-gnu//:python",
+    python_version = "3.13",
+)
 
 # Native libraries from the Bazel Central Registry that //:_cmd.so links.
 bazel_dep(name = "freetype", version = "2.14.1")  # FTL (or GPLv2, not used)
