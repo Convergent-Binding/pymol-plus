@@ -1,21 +1,10 @@
-import argparse
 import glob
 import io as cStringIO
 import os
 import pathlib
-import re
-import shutil
-import sys
-import sysconfig
 import time
 from collections import defaultdict
 from subprocess import PIPE, Popen
-
-import numpy
-from setuptools import Extension, setup
-from setuptools.command.build_ext import build_ext
-from setuptools.command.build_py import build_py
-from setuptools.command.install import install
 
 def create_all(generated_dir, pymoldir="."):
   """
@@ -134,16 +123,29 @@ def create_shadertext(shaderdir, shaderdir2, outputheader, outputfile):
   outputfile.close()
 
 
-def create_buildinfo(outputdir, pymoldir="."):
-  try:
-    sha = (
-      Popen(["git", "rev-parse", "HEAD"], cwd=pymoldir, stdout=PIPE)
-      .stdout.read()
-      .strip()
-      .decode()
-    )
-  except OSError:
-    sha = ""
+def create_buildinfo(outputdir, pymoldir=".", git_sha=None, build_date=None):
+  """Writes PyMOLBuildInfo.h with the build's git SHA and date.
+
+  Args:
+    outputdir: Directory the header is written to.
+    pymoldir: Checkout whose `git rev-parse HEAD` is used when no SHA is given.
+    git_sha: The SHA to embed. A Bazel action passes it, because neither the
+      `git` binary nor the checkout's .git directory is a declared input.
+    build_date: The Unix time to embed. A Bazel action passes it, because a
+      wall-clock read inside an action makes its output uncacheable.
+  """
+  sha = git_sha
+  if sha is None:
+    try:
+      sha = (
+        Popen(["git", "rev-parse", "HEAD"], cwd=pymoldir, stdout=PIPE)
+        .stdout.read()
+        .strip()
+        .decode()
+      )
+    except OSError:
+      sha = ""
+  date = build_date if build_date is not None else time.time()
 
   with openw(os.path.join(outputdir, "PyMOLBuildInfo.h")) as out:
     print(
@@ -151,7 +153,7 @@ def create_buildinfo(outputdir, pymoldir="."):
 #define _PyMOL_BUILD_DATE %d
 #define _PYMOL_BUILD_GIT_SHA "%s"
   """
-      % (time.time(), sha),
+      % (date, sha),
       file=out,
       )
 

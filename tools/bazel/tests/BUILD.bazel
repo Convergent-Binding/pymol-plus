@@ -17,3 +17,27 @@ py_test(
     ],
     python_version = "3.12",
 )
+
+# create_buildinfo() writes the SHA and date its caller gives without running
+# git (the Bazel action passes both).
+py_test(
+    name = "create_buildinfo_test",
+    size = "small",
+    srcs = ["create_buildinfo_test.py"],
+    deps = ["//scripts/python:create_generated_files_lib"],
+)
+
+# The shader cache and build info the _cmd extension compiles in.
+py_test(
+    name = "generated_headers_test",
+    size = "small",
+    srcs = ["generated_headers_test.py"],
+    args = [
+        "\"$(rootpaths //tools/bazel:pymol_generated_headers)\"",
+        "\"$(rootpaths //data/shaders:shader_srcs)\"",
+    ],
+    data = [
+        "//data/shaders:shader_srcs",
+        "//tools/bazel:pymol_generated_headers",
+    ],
+)

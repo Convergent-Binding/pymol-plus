@@ -1,0 +1,13 @@
+# The shader sources //tools/bazel:pymol_generated_headers compiles into
+# _cmd's shader cache (ShaderText.cpp). Its own package so that //data's
+# runtime_data glob, which ships them in the wheel as pymol/data/shaders,
+# names them through this filegroup.
+
+filegroup(
+    name = "shader_srcs",
+    srcs = glob(
+        ["*"],
+        exclude = ["BUILD.bazel"],
+    ),
+    visibility = ["//visibility:public"],
+)
