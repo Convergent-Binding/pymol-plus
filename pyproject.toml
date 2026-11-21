@@ -1,5 +1,5 @@
 # The wheels are built by Bazel (bazel build //tools/bazel/wheel:wheel); see
-# docs/features/bazel-build/. The table is not simply deleted: without it pip
+# "Build wheel file" in README.md. The table is not simply deleted: without it pip
 # falls back to setuptools, which would build this [project] metadata into a
 # wheel with none of the compiled extensions -- installable, and broken at
 # `import pymol._cmd`. The in-tree backend refuses with an explanation instead.

@@ -1,7 +1,7 @@
 """Bazel build of the pymol-open-source-whl wheel.
 
-Ported from open-protein-platform's Bazel build of the same PyMOL sources (see
-docs/features/bazel-build/). Every native dependency is declared here and
+Ported from open-protein-platform's Bazel build of the same PyMOL sources.
+Every native dependency is declared here and
 fetched by Bazel, pinned by checksum, instead of being read from vcpkg, the
 former pre-built/ directory or any other ambient installation.
 """

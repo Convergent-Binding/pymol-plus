@@ -1,5 +1,4 @@
-# Starlark helpers and build-time tools for the Bazel build of the wheel; see
-# docs/features/bazel-build/.
+# Starlark helpers and build-time tools for the Bazel build of the wheel.
 
 load("@rules_python//python:defs.bzl", "py_binary")
 load(":shader_gen.bzl", "pymol_generated_headers")

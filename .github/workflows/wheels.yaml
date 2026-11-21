@@ -31,8 +31,8 @@ on:
       # Documentation and AI tooling
       - 'docs/**'
       - '**/*.md'
-      - '.agents/**'
-      - '.opencode/**'
+      - '.opp/**'
+      - '.codegraph/**'
       - '.mailmap'
   workflow_dispatch:
   push:
