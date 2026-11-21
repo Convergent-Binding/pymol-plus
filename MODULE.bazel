@@ -42,6 +42,10 @@ python.toolchain(python_version = "3.12")
 python.toolchain(python_version = "3.13")
 python.toolchain(python_version = "3.14")
 
+# The app bundles the 3.13 runtime itself (python-build-standalone, the files
+# of @python_3_13//:files); see //distribution/bundle.
+use_repo(python, "python_3_13")
+
 # Native libraries from the Bazel Central Registry that //:_cmd.so links.
 bazel_dep(name = "freetype", version = "2.14.1")  # FTL (or GPLv2, not used)
 bazel_dep(name = "glew", version = "2.3.1")  # Modified BSD
@@ -163,6 +167,16 @@ pip.parse(
 )
 
 use_repo(pip, "pymol_pip")
+
+# The Python packages bundled into the app, for its Python 3.13; see
+# distribution/requirements.in.
+pip.parse(
+    hub_name = "app_pip",
+    python_version = "3.13",
+    requirements_lock = "//distribution:requirements_lock.txt",
+)
+
+use_repo(pip, "app_pip")
 
 # The uv binary //tools/bazel:requirements locks requirements_lock.txt with,
 # fetched by rules_python; the version rules_python 2.3.2 itself uses.
