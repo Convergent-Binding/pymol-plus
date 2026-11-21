@@ -1,0 +1,12 @@
+# create_generated_files.py stays the one source of the shader-cache and
+# build-info generation; the Bazel action in //tools/bazel:shader_gen.bzl
+# calls it.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "create_generated_files_lib",
+    srcs = ["create_generated_files.py"],
+    imports = ["."],
+    visibility = ["//visibility:public"],
+)

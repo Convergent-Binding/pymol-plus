@@ -1,0 +1,28 @@
+# VMD molfile plugin sources (see ../../LICENSE and ./LICENSE), compiled into
+# //:_cmd.so as the former CMakeLists.txt's ALL_SRC compiled them, here as a library of
+# their own. CUDA (jsplugin.c, ENABLECUDATESTS), Tcl and zlib (vtfplugin.c,
+# _USE_TCL/_USE_ZLIB) are #ifdef-guarded and never defined, as in CMake.
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("//tools/bazel:pymol_native.bzl", "PYMOL_COPTS", "PYMOL_CXXOPTS", "PYMOL_DEFINES")
+
+cc_library(
+    name = "molfile_plugins",
+    srcs = glob([
+        "*.c",
+        "*.cpp",
+    ]),
+    hdrs = glob([
+        "*.h",
+        "*.hxx",
+    ]),
+    copts = PYMOL_COPTS,
+    cxxopts = PYMOL_CXXOPTS,
+    defines = PYMOL_DEFINES,
+    includes = ["."],
+    visibility = ["//visibility:public"],
+    deps = [
+        "//contrib/uiuc/plugins/include:headers",
+        "@netcdf_c//:netcdf",
+    ],
+)

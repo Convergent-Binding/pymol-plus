@@ -1,0 +1,70 @@
+# BUILD file for the @netcdf_c external repository (see MODULE.bazel).
+#
+# netCDF-C 4.10.1 doesn't publish to the Bazel Central Registry, so it's built
+# from its own upstream CMake project via rules_foreign_cc instead of being
+# read from vcpkg or another ambient installation. netcdfplugin.c only calls the classic netCDF API, so HDF5/NetCDF-4,
+# DAP, NCZarr, byte-range access, and the plugin subsystem are all disabled to
+# keep this to a plain, dependency-free C library build.
+
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+
+package(default_visibility = ["//visibility:public"])
+
+filegroup(
+    name = "all_srcs",
+    srcs = glob(["**"]),
+)
+
+cmake(
+    name = "netcdf",
+    build_args = ["--", "-j4"],
+    cache_entries = {
+        "BUILD_SHARED_LIBS": "OFF",
+        "BUILD_TESTING": "OFF",
+        # Required on Linux: linking a static lib into a shared object (our
+        # _cmd.so) needs position-independent code, or the linker rejects it
+        # with "requires dynamic R_X86_64_PC32 reloc ... recompile with
+        # -fPIC" (found on a real Linux build). Harmless on
+        # macOS/Windows, where it's already the default or not enforced.
+        # CMake's GNUInstallDirs defaults CMAKE_INSTALL_LIBDIR to "lib64" on
+        # 64-bit RedHat-family systems and "lib" on Debian-family ones, so
+        # netCDF installed to lib64/ when open-protein-platform moved its Linux
+        # build into PyPA's AlmaLinux 8 manylinux image, and rules_foreign_cc
+        # rejected it: "missing expected installed output: lib/libnetcdf.a ...
+        # other files in the install root with the same name: lib64/
+        # libnetcdf.a". Pinning it makes the install layout identical on every
+        # platform instead of depending on the host distribution's convention
+        # (found by running the build inside the real image, before CI did).
+        "CMAKE_INSTALL_LIBDIR": "lib",
+        "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
+        # CHECK_FUNCTION_EXISTS(memmove) fails under MSVC with optimisation
+        # on (/O2 makes memmove an intrinsic), so netCDF compiled its own
+        # memmove (libdispatch/dmissing.c) and MSVC rejected it: "C2169:
+        # 'memmove': intrinsic function, cannot be defined". Every target
+        # platform has memmove; preset the result instead of probing.
+        "HAVE_MEMMOVE": "1",
+        "NETCDF_BUILD_UTILITIES": "OFF",
+        "NETCDF_ENABLE_BYTERANGE": "OFF",
+        "NETCDF_ENABLE_DAP": "OFF",
+        "NETCDF_ENABLE_HDF5": "OFF",
+        "NETCDF_ENABLE_NCZARR": "OFF",
+        "NETCDF_ENABLE_NETCDF_4": "OFF",
+        "NETCDF_ENABLE_PLUGINS": "OFF",
+        "NETCDF_ENABLE_TESTS": "OFF",
+    },
+    # netCDF links zlib unconditionally (even with NETCDF_ENABLE_NETCDF_4
+    # off); declared explicitly rather than relying on ambient system zlib,
+    # which doesn't exist on a bare Windows runner (see MODULE.bazel).
+    deps = ["@zlib//:zlib"],
+    lib_source = ":all_srcs",
+    # MSVC's CMake install step names the static library netcdf.lib (no
+    # "lib" prefix, ".lib" not ".a"), unlike the Unix `ar` archive naming
+    # everywhere else -- found via a real Windows build succeeding all the
+    # way through compile and CMake install, then failing rules_foreign_cc's
+    # own output-path validation because it was still looking for
+    # libnetcdf.a.
+    out_static_libs = select({
+        "@platforms//os:windows": ["netcdf.lib"],
+        "//conditions:default": ["libnetcdf.a"],
+    }),
+)

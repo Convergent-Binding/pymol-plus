@@ -1,0 +1,3 @@
+# Marks this directory as a Bazel package so BUILD.netcdf.bazel can be
+# referenced by label from MODULE.bazel's http_archive(build_file = ...).
+exports_files(["BUILD.netcdf.bazel"])

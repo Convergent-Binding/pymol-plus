@@ -1,0 +1,156 @@
+# The pymol-open-source-whl wheel. Name, version, requires-python and
+# dependencies come from pyproject.toml (//tools/bazel:pyproject_repo.bzl);
+# the Python tag follows the invocation's
+# --@rules_python//python/config_settings:python_version.
+#
+#   bazel build //tools/bazel/wheel:wheel \
+#     --@rules_python//python/config_settings:python_version=3.12
+#
+# One wheel target per OS, because each stages the extensions it compiled under
+# that OS's file names; building one on another OS would mislabel its binaries.
+# :wheel picks the host's and fails at analysis on any other OS or CPU rather
+# than producing a mislabelled wheel. The per-OS targets are `manual`, so
+# `bazel build //...` and `bazel test //...` build only the host's wheel (through
+# :wheel) and do not analyse the others, whose platform select()s have no
+# branch for, e.g., an arm64 Mac. Release CI repairs the Linux wheel with
+# auditwheel (which retags linux_x86_64 as manylinux_2_28_x86_64 and bundles
+# libgomp) and the Windows wheel with delvewheel (which bundles the MSVC C++ and
+# OpenMP runtimes), as cibuildwheel did.
+
+load("@pymol_project_metadata//:metadata.bzl", "DEPENDENCIES", "DESCRIPTION", "NAME", "REQUIRES_PYTHON", "VERSION")
+load("@rules_python//python:packaging.bzl", "py_package", "py_wheel")
+load("//tools/bazel:py_tags.bzl", "python_tag")
+
+# `authors` is a list of inline tables, which the Starlark pyproject reader
+# does not parse; keep in step with pyproject.toml by hand.
+_AUTHOR = "Martin Urban"
+
+_AUTHOR_EMAIL = "martin.urban@studmail.w-hs.de"
+
+_PACKAGES = [
+    "//modules/chempy",
+    "//modules/pmg_qt",
+    "//modules/pmg_tk",
+    "//modules/pymol",
+    "//modules/pymol2",
+]
+
+# Paths stripped from every member: the package roots and the staging package.
+_STRIP_PATH_PREFIXES = [
+    "modules",
+    "tools/bazel/wheel_staging",
+]
+
+_EXTRA_DISTINFO_FILES = {
+    "//:AUTHORS": "AUTHORS",
+    "//:LICENSE": "LICENSE",
+}
+
+# py_wheel reads only each dep's DefaultInfo files, which for a py_library are
+# its `srcs`: pmg_qt's .ui forms and every staged file are `data` and would be
+# silently missing. py_package gathers runfiles into its files, so the wheels
+# depend on these instead.
+py_package(
+    name = "pkg_macos",
+    deps = _PACKAGES + ["//tools/bazel/wheel_staging:wheel_staged_files_macos"],
+)
+
+py_package(
+    name = "pkg_linux",
+    deps = _PACKAGES + ["//tools/bazel/wheel_staging:wheel_staged_files_linux"],
+)
+
+py_package(
+    name = "pkg_windows",
+    deps = _PACKAGES + ["//tools/bazel/wheel_staging:wheel_staged_files_windows"],
+)
+
+# The binaries need macOS 12 (.bazelrc's --macos_minimum_os), so the tag says
+# macosx_12_0, as the CMake-built wheels did.
+py_wheel(
+    name = "pymol_wheel_macos",
+    abi = python_tag(),
+    author = _AUTHOR,
+    author_email = _AUTHOR_EMAIL,
+    description_file = "//:README.md",
+    distribution = NAME,
+    extra_distinfo_files = _EXTRA_DISTINFO_FILES,
+    platform = select(
+        {
+            "@platforms//cpu:arm64": "macosx_12_0_arm64",
+            "@platforms//cpu:x86_64": "macosx_12_0_x86_64",
+        },
+        no_match_error = "pymol-open-source-whl builds macOS wheels for arm64 and x86_64 only.",
+    ),
+    python_requires = REQUIRES_PYTHON,
+    python_tag = python_tag(),
+    requires = DEPENDENCIES,
+    strip_path_prefixes = _STRIP_PATH_PREFIXES,
+    summary = DESCRIPTION,
+    # Only :wheel picks one for the host; see the note at the top.
+    tags = ["manual"],
+    version = VERSION,
+    deps = [":pkg_macos"],
+)
+
+# linux_x86_64, not a manylinux tag: auditwheel retags the wheel with the
+# policy its binaries actually satisfy, and refuses one that already claims a
+# manylinux tag.
+py_wheel(
+    name = "pymol_wheel_linux",
+    abi = python_tag(),
+    author = _AUTHOR,
+    author_email = _AUTHOR_EMAIL,
+    description_file = "//:README.md",
+    distribution = NAME,
+    extra_distinfo_files = _EXTRA_DISTINFO_FILES,
+    platform = select(
+        {"@platforms//cpu:x86_64": "linux_x86_64"},
+        no_match_error = "pymol-open-source-whl builds Linux wheels for x86_64 only.",
+    ),
+    python_requires = REQUIRES_PYTHON,
+    python_tag = python_tag(),
+    requires = DEPENDENCIES,
+    strip_path_prefixes = _STRIP_PATH_PREFIXES,
+    summary = DESCRIPTION,
+    # Only :wheel picks one for the host; see the note at the top.
+    tags = ["manual"],
+    version = VERSION,
+    deps = [":pkg_linux"],
+)
+
+py_wheel(
+    name = "pymol_wheel_windows",
+    abi = python_tag(),
+    author = _AUTHOR,
+    author_email = _AUTHOR_EMAIL,
+    description_file = "//:README.md",
+    distribution = NAME,
+    extra_distinfo_files = _EXTRA_DISTINFO_FILES,
+    platform = select(
+        {"@platforms//cpu:x86_64": "win_amd64"},
+        no_match_error = "pymol-open-source-whl builds Windows wheels for x86_64 only.",
+    ),
+    python_requires = REQUIRES_PYTHON,
+    python_tag = python_tag(),
+    requires = DEPENDENCIES,
+    strip_path_prefixes = _STRIP_PATH_PREFIXES,
+    summary = DESCRIPTION,
+    # Only :wheel picks one for the host; see the note at the top.
+    tags = ["manual"],
+    version = VERSION,
+    deps = [":pkg_windows"],
+)
+
+alias(
+    name = "wheel",
+    actual = select(
+        {
+            "@platforms//os:linux": ":pymol_wheel_linux",
+            "@platforms//os:macos": ":pymol_wheel_macos",
+            "@platforms//os:windows": ":pymol_wheel_windows",
+        },
+        no_match_error = "pymol-open-source-whl builds wheels for macOS, Linux and Windows only.",
+    ),
+    visibility = ["//visibility:public"],
+)

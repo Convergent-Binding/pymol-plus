@@ -1,0 +1,11 @@
+# pyproject.toml's in-tree PEP 517 backend, which refuses pip builds; see
+# pymol_build_backend.py.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "build_backend",
+    srcs = ["pymol_build_backend.py"],
+    imports = ["."],
+    visibility = ["//tools/bazel/tests:__pkg__"],
+)

@@ -46,242 +46,223 @@ concurrency:
 permissions:
   contents: read
 
+# Each wheel is built by Bazel (//tools/bazel/wheel:wheel) for one CPython
+# version, repaired where its platform needs it, installed into a clean
+# environment and tested with scripts/test_wheel.py, which runs tests/ with the
+# minimum and the latest supported NumPy.
 env:
-  VCPKG_ROOT: ${{ github.workspace }}/vendor/vcpkg
-  VCPKG_COMMIT: 9942fb5f996ea431c5ed8fb8d2a53f31d08df62e
+  BAZELISK_VERSION: v1.29.0
 
 jobs:
   # ----- Windows build section
   build-windows:
-    name: Windows (${{ matrix.win_arch }})
-    env:
-      WIN_ARCH: ${{ matrix.win_arch }}
+    name: Windows (x64, Python ${{ matrix.python }})
     strategy:
       fail-fast: false
       matrix:
-        win_arch: ['x64']
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
     runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          submodules: recursive
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-windows-${{ matrix.python }}
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Initialize vcpkg
-        run: |
-          git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
-          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
-
-      - name: Cache vcpkg downloads
-        uses: actions/cache@v4
-        with:
-          path: vendor/vcpkg/downloads
-          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
-
-      - name: Cache vcpkg installed packages
-        uses: actions/cache@v4
-        with:
-          path: vcpkg_installed
-          key: vcpkg-installed-${{ runner.os }}-${{ matrix.win_arch }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-installed-${{ runner.os }}-${{ matrix.win_arch }}-${{ env.VCPKG_COMMIT }}-
-
-      - name: Setup Python 3.11
+      - name: Setup Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
 
-      - name: Sync Python environment
-        run: uv sync --locked --no-install-project
-        shell: cmd
-
-      - name: Bootstrap vcpkg
-        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.bat -disableMetrics
-
-      - name: Last build environment setup steps
-        run: uv run --locked --no-sync python pymakefile.py setup_dev_env
-        shell: cmd
-
-      - name: Build and test x64 wheels
-        if: ${{ matrix.win_arch == 'x64' }}
+      - name: Build wheel
         run: |
-          ${{ env.VCPKG_ROOT }}/vcpkg install --triplet=x64-windows-static
-          set WIN_ARCH=x64
-          uv run --locked --no-sync python pymakefile.py build_wheels platform=windows archs=AMD64
-        shell: cmd
+          bazel build \
+            --@rules_python//python/config_settings:python_version=${{ matrix.python }} \
+            //tools/bazel/wheel:wheel
+
+      # As cibuildwheel did: delvewheel bundles the MSVC C++ runtime
+      # (msvcp140) and the OpenMP runtime (vcomp140) the extension links.
+      - name: Repair wheel
+        run: |
+          PYTAG="cp${PY//./}"
+          python -m pip install --disable-pip-version-check delvewheel
+          python -m delvewheel repair -w wheelhouse \
+            bazel-bin/tools/bazel/wheel/pymol_open_source_whl-*-"$PYTAG"-"$PYTAG"-win_amd64.whl
+          python scripts/check_wheel_member.py wheelhouse vcomp140
+        env:
+          PY: ${{ matrix.python }}
+
+      - name: Test wheel
+        run: |
+          python -m venv .wheel-test
+          .wheel-test/Scripts/python -m pip install --disable-pip-version-check pytest importlib_metadata wheelhouse/*.whl
+          .wheel-test/Scripts/python scripts/test_wheel.py
+        env:
+          PYMOL_WHEEL_TEST_REPORTS: build/wheel-test-results
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-Windows-${{ matrix.win_arch }}
+          name: PyMOL-wheel-Windows-x64-${{ matrix.python }}
           path: ./wheelhouse/*.whl
+          if-no-files-found: error
 
       - name: Upload wheel test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-tests-Windows-${{ matrix.win_arch }}
+          name: wheel-tests-Windows-x64-${{ matrix.python }}
           path: ./build/wheel-test-results/*.xml
           if-no-files-found: warn
   # --- end
 
   # ----- macOS build section
   build-macos:
-    name: macOS (${{ matrix.os }})
+    name: macOS (${{ matrix.os }}, Python ${{ matrix.python }})
     strategy:
       fail-fast: false
       matrix:
         os: [ macos-15-intel, macos-15 ]
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
     runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          submodules: recursive
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ matrix.os }}-${{ matrix.python }}
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Initialize vcpkg
-        run: |
-          git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
-          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
-
-      - name: Cache vcpkg downloads
-        uses: actions/cache@v4
-        with:
-          path: vendor/vcpkg/downloads
-          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
-
-      - name: Cache vcpkg installed packages
-        uses: actions/cache@v4
-        with:
-          path: vcpkg_installed
-          key: vcpkg-installed-${{ matrix.os }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-installed-${{ matrix.os }}-${{ env.VCPKG_COMMIT }}-
-
-      - name: Setup Python 3.11
+      - name: Setup Python ${{ matrix.python }}
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python }}
 
-      - name: Sync Python environment
-        run: uv sync --locked --no-install-project
-
-      - name: Bootstrap vcpkg
-        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
-
-      - name: Install vcpkg dependencies
+      # The wheels link only system frameworks and Bazel-built static
+      # libraries, so there is nothing for delocate to bundle (the CMake-built
+      # wheels carried no .dylibs either).
+      - name: Build wheel
         run: |
-          ${{ env.VCPKG_ROOT }}/vcpkg install
+          bazel build \
+            --@rules_python//python/config_settings:python_version=${{ matrix.python }} \
+            //tools/bazel/wheel:wheel
+          PYTAG="cp${PY//./}"
+          mkdir -p wheelhouse
+          cp bazel-bin/tools/bazel/wheel/pymol_open_source_whl-*-"$PYTAG"-"$PYTAG"-macosx_*.whl wheelhouse/
+        env:
+          PY: ${{ matrix.python }}
 
-      - name: Last build environment setup steps
-        run: ARCH=$(uname -m) uv run --locked --no-sync python pymakefile.py setup_dev_env
-
-      - name: Build and test wheels
+      - name: Test wheel
         run: |
-          ARCH="$(uname -m)"
-          export ARCH
-          export MACOSX_DEPLOYMENT_TARGET=12.0
-          uv run --locked --no-sync python pymakefile.py build_wheels
+          python -m venv .wheel-test
+          .wheel-test/bin/python -m pip install --disable-pip-version-check pytest importlib_metadata wheelhouse/*.whl
+          .wheel-test/bin/python scripts/test_wheel.py
+        env:
+          PYMOL_WHEEL_TEST_REPORTS: build/wheel-test-results
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-${{ matrix.os }}
+          name: PyMOL-wheel-${{ matrix.os }}-${{ matrix.python }}
           path: ./wheelhouse/*.whl
+          if-no-files-found: error
 
       - name: Upload wheel test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-tests-${{ matrix.os }}
+          name: wheel-tests-${{ matrix.os }}-${{ matrix.python }}
           path: ./build/wheel-test-results/*.xml
           if-no-files-found: warn
   # --- end
 
   # ----- GNU Linux build section
   build-gnu-linux:
-    name: GNU/Linux (x64)
+    name: GNU/Linux (x64, Python ${{ matrix.python }})
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.10', '3.11', '3.12', '3.13', '3.14']
     runs-on: ubuntu-22.04
-    env:
-      # cibuildwheel copies /project; /host preserves reports on the runner.
-      PYMOL_WHEEL_TEST_REPORTS: /host${{ github.workspace }}/build/wheel-test-results
+    # PyPA's manylinux_2_28 image, as cibuildwheel used: its gcc-toolset keeps
+    # C++17 code inside the manylinux_2_28 policy.
+    container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+      # The checkout belongs to another user than the container's root, and
+      # git refuses such a repository; the build-info header's git SHA comes
+      # from `git rev-parse HEAD` (tools/bazel/workspace_status.sh).
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Install system dependencies
+      # The image ships no bazel; bazelisk honours .bazelversion.
+      - name: Install bazelisk
         run: |
-          sudo apt-get update
-          sudo apt-get install git build-essential libxmu-dev libxi-dev libgl-dev libglew-dev libpng-dev libfreetype6-dev libxml2-dev libmsgpack-dev libglm-dev libnetcdf-dev linux-libc-dev autoconf perl
+          curl -fsSL -o /usr/local/bin/bazel \
+            "https://github.com/bazelbuild/bazelisk/releases/download/${BAZELISK_VERSION}/bazelisk-linux-amd64"
+          chmod +x /usr/local/bin/bazel
+          bazel --version
 
-      - name: Initialize vcpkg
+      - name: Install OpenGL development headers
+        run: dnf install -y mesa-libGL-devel
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-linux-${{ matrix.python }}
+
+      - name: Build wheel
         run: |
-          git clone https://github.com/Microsoft/vcpkg.git vendor/vcpkg
-          git -C vendor/vcpkg checkout ${{ env.VCPKG_COMMIT }}
+          bazel build \
+            --@rules_python//python/config_settings:python_version=${{ matrix.python }} \
+            //tools/bazel/wheel:wheel
 
-      - name: Cache vcpkg downloads
-        uses: actions/cache@v4
-        with:
-          path: vendor/vcpkg/downloads
-          key: vcpkg-downloads-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-downloads-${{ env.VCPKG_COMMIT }}-
-
-      - name: Cache vcpkg installed packages
-        uses: actions/cache@v4
-        with:
-          path: vcpkg_installed
-          key: vcpkg-installed-${{ runner.os }}-x64-${{ env.VCPKG_COMMIT }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-installed-${{ runner.os }}-x64-${{ env.VCPKG_COMMIT }}-
-
-      - name: Setup Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Sync Python environment
-        run: uv sync --locked --no-install-project
-
-      - name: Bootstrap vcpkg
-        run: ${{ env.VCPKG_ROOT }}/bootstrap-vcpkg.sh -disableMetrics
-
-      - name: Install vcpkg dependencies
+      # The Bazel wheel is tagged linux_x86_64; auditwheel retags it with the
+      # policy its binaries satisfy and bundles libgomp, which no manylinux
+      # policy allows a wheel to expect on the system.
+      - name: Repair wheel
         run: |
-          ${{ env.VCPKG_ROOT }}/vcpkg install
+          PYTAG="cp${PY//./}"
+          auditwheel repair --plat manylinux_2_28_x86_64 -w wheelhouse \
+            bazel-bin/tools/bazel/wheel/pymol_open_source_whl-*-"$PYTAG"-"$PYTAG"-linux_x86_64.whl
+          auditwheel show wheelhouse/*.whl
+          "/opt/python/$PYTAG-$PYTAG/bin/python" scripts/check_wheel_member.py wheelhouse pymol_open_source_whl.libs/libgomp
+        env:
+          PY: ${{ matrix.python }}
 
-      - name: Last build environment setup steps
-        run: uv run --locked --no-sync python pymakefile.py setup_dev_env
-
-      - name: Build and test wheels
-        run: uv run --locked --no-sync python pymakefile.py build_wheels
+      - name: Test wheel
+        run: |
+          PYTAG="cp${PY//./}"
+          "/opt/python/$PYTAG-$PYTAG/bin/python" -m venv .wheel-test
+          .wheel-test/bin/python -m pip install --disable-pip-version-check pytest importlib_metadata wheelhouse/*.whl
+          .wheel-test/bin/python scripts/test_wheel.py
+        env:
+          PY: ${{ matrix.python }}
+          PYMOL_WHEEL_TEST_REPORTS: build/wheel-test-results
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: PyMOL-wheel-GNU-Linux
+          name: PyMOL-wheel-GNU-Linux-${{ matrix.python }}
           path: ./wheelhouse/*.whl
+          if-no-files-found: error
 
       - name: Upload wheel test reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wheel-tests-GNU-Linux
+          name: wheel-tests-GNU-Linux-${{ matrix.python }}
           path: ./build/wheel-test-results/*.xml
           if-no-files-found: warn
   # --- end

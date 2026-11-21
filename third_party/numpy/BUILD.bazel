@@ -1,0 +1,52 @@
+# The NumPy C-API headers of the platform being built for. _numpyconfig.h is
+# generated per platform (NPY_SIZEOF_LONG differs on Windows), so each wheel
+# platform compiles against the headers from NumPy's own wheel for it; see
+# MODULE.bazel.
+
+exports_files(["BUILD.numpy.bazel"])
+
+alias(
+    name = "headers",
+    actual = select(
+        {
+            "//third_party/numpy:linux_x86_64": "@numpy_headers_linux_x86_64//:headers",
+            "//third_party/numpy:macos_arm64": "@numpy_headers_macos_arm64//:headers",
+            "//third_party/numpy:macos_x86_64": "@numpy_headers_macos_x86_64//:headers",
+            "//third_party/numpy:windows_x86_64": "@numpy_headers_win_amd64//:headers",
+        },
+        no_match_error = "pymol-open-source-whl builds for Linux x86_64, macOS arm64 and x86_64, and Windows x86_64 only. Add the platform's NumPy header archive to MODULE.bazel and to //third_party/numpy to extend it.",
+    ),
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "linux_x86_64",
+    constraint_values = [
+        "@platforms//os:linux",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "macos_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:arm64",
+    ],
+)
+
+config_setting(
+    name = "macos_x86_64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:x86_64",
+    ],
+)
+
+config_setting(
+    name = "windows_x86_64",
+    constraint_values = [
+        "@platforms//os:windows",
+        "@platforms//cpu:x86_64",
+    ],
+)

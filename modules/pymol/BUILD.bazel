@@ -1,0 +1,39 @@
+# The pure-Python `pymol` package. _cmd and the data/ tree are not in this
+# directory; //tools/bazel/wheel_staging puts them into the wheel, and the
+# *_for_run targets below stage them here for Bazel tests.
+
+load("@rules_python//python:defs.bzl", "py_library")
+load("//tools/bazel:relocate.bzl", "relocate_file", "relocate_tree")
+
+py_library(
+    name = "pymol",
+    srcs = glob(["**/*.py"]),
+    # modules/ is the import root, so `import pymol` resolves here.
+    imports = [".."],
+    visibility = ["//visibility:public"],
+)
+
+# _cmd staged beside __init__.py, where `import pymol._cmd` looks for it when
+# modules/ is the import root. The name is untagged (`_cmd.pyd`, `_cmd.so`):
+# CPython accepts the bare suffix on any ABI, and a Bazel test runs the same
+# interpreter the extension was compiled against. The wheel's tagged names
+# are //tools/bazel/wheel_staging's business.
+relocate_file(
+    name = "cmd_extension_for_run",
+    src = "//:_cmd.so",
+    out = select({
+        "@platforms//os:windows": "_cmd.pyd",
+        "//conditions:default": "_cmd.so",
+    }),
+    visibility = ["//visibility:public"],
+)
+
+# pymol's setup_environ() defaults PYMOL_DATA to <package>/data, so staging
+# the tree here needs no environment variable at run time.
+relocate_tree(
+    name = "runtime_data_for_run",
+    srcs = ["//data:runtime_data"],
+    dest_prefix = "data",
+    strip_prefix = "data",
+    visibility = ["//visibility:public"],
+)

@@ -1,0 +1,16 @@
+# Runtime data shipped as pymol/data, pyproject.toml's former `"pymol/data" =
+# "data"` wheel mapping: the whole tree, shaders included. data/shaders is a
+# package of its own (//tools/bazel:pymol_generated_headers compiles it), so
+# it joins through its filegroup; glob() does not cross into it.
+
+filegroup(
+    name = "runtime_data",
+    srcs = glob(
+        ["**/*"],
+        exclude = [
+            "BUILD.bazel",
+            "shaders/**",
+        ],
+    ) + ["//data/shaders:shader_srcs"],
+    visibility = ["//visibility:public"],
+)

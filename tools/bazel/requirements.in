@@ -1,0 +1,7 @@
+# Python packages Bazel tests import, locked in requirements_lock.txt with
+#   uv pip compile --universal --generate-hashes --python-version 3.10 \
+#     tools/bazel/requirements.in -o tools/bazel/requirements_lock.txt
+# NumPy at the wheel's runtime floor: 2.2 has no CPython 3.14 wheels, 2.3.3 is
+# the first that does (the same split scripts/test_wheel.py uses).
+numpy==2.2.6; python_version < "3.14"
+numpy==2.3.3; python_version >= "3.14"

@@ -1,0 +1,12 @@
+# VMD molfile plugin headers, included from _cmd sources via
+# the former CMakeLists.txt's `contrib/uiuc/plugins/include` entry.
+# See ../LICENSE for the UIUC/VMD plugin license.
+
+load("@rules_cc//cc:defs.bzl", "cc_library")
+
+cc_library(
+    name = "headers",
+    hdrs = glob(["*.h"]),
+    includes = ["."],
+    visibility = ["//visibility:public"],
+)

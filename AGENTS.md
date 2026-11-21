@@ -31,7 +31,9 @@ Before declaring completion:
 
 ## Repository layout
 
-- The repository root holds the PyMOL sources and the wheel build (`pymol-open-source-whl`).
+- The repository root holds the PyMOL sources and the wheel build (`pymol-open-source-whl`),
+  built with Bazel: `MODULE.bazel`, the `BUILD.bazel` files beside the sources, and
+  `tools/bazel/` (see `docs/features/bazel-build/`).
 - `distribution/` holds the ready-to-run app packaging; for work there, `distribution/AGENTS.md`
   is the more specific guidance. Its workflows are in the root `.github/workflows/`
   (`build_app.yaml`, `docs.yaml`).

@@ -1,11 +1,15 @@
+# The wheels are built by Bazel (bazel build //tools/bazel/wheel:wheel); see
+# docs/features/bazel-build/. The table is not simply deleted: without it pip
+# falls back to setuptools, which would build this [project] metadata into a
+# wheel with none of the compiled extensions -- installable, and broken at
+# `import pymol._cmd`. The in-tree backend refuses with an explanation instead.
 [build-system]
-requires = [
-  "scikit-build-core",
-  "setuptools>=69.2.0",
-  "numpy>=2.0"
-]
-build-backend = "scikit_build_core.build"
+requires = []
+build-backend = "pymol_build_backend"
+backend-path = ["tools/build_backend"]
 
+# Bazel reads name, version, requires-python and dependencies from this table
+# (tools/bazel/pyproject_repo.bzl); keep them as plain strings and string lists.
 [project]
 name = "pymol-open-source-whl"
 readme = "README.md"
@@ -27,12 +31,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "build==1.2.2.post1",
-  "cibuildwheel",
   "delvewheel",
   "pillow==10.3.0",
   "pytest==8.3.5",
-  "setuptools>=69.2.0",
 ]
 
 [project.urls]
@@ -40,41 +41,7 @@ dev = [
 Documentation = "https://pymolwiki.org/index.php/Main_Page"
 Repository = "https://github.com/urban233/pymol-open-source-whl"
 
-[tool.scikit-build]
-build.verbose = true
-logging.level = "DEBUG"
-cmake.args = [
-  "-DCMAKE_TOOLCHAIN_FILE=./vendor/vcpkg/scripts/buildsystems/vcpkg.cmake",
-  "-DVCPKG_INSTALLED_DIR=./vcpkg_installed",
-  "-DBUILD_PYTHON_EXTENSION=ON",
-  "-DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL"
-]
-sdist.include = [
-  "build",
-  "pre-built",
-  "vcpkg_installed",
-  "vendor/vcpkg"
-]
-[tool.scikit-build.wheel.packages]
-chempy = "modules/chempy"
-pmg_qt = "modules/pmg_qt"
-pmg_tk = "modules/pmg_tk"
-pymol = "modules/pymol"
-pymol2 = "modules/pymol2"
-"pymol/data" = "data"
-
-[tool.cibuildwheel]
-build = ["cp310-*", "cp311-*", "cp312-*", "cp313-*", "cp314-*"]
-#build = ["cp311-*"] # Only for debug purposes
-# Skip Linux 32-bit builds and AlpineLinux builds
-skip = ["*-manylinux_i686", "*musllinux*"]
-test-requires = ["pytest", "importlib_metadata"]
-test-command = "python {project}/scripts/test_wheel.py"
-
-[tool.cibuildwheel.environment]
-VCPKG_ROOT = "{project}/vendor/vcpkg"
-
-[tool.cibuildwheel.linux]
-before-all = "yum install -y perl perl-IPC-Cmd zip"
-manylinux-x86_64-image = "manylinux_2_28"
-environment-pass = ["PYMOL_WHEEL_TEST_REPORTS"]
+# uv installs the dependencies and the dev group without building this project,
+# which only Bazel can build; `pymake test` installs the Bazel-built wheel.
+[tool.uv]
+package = false

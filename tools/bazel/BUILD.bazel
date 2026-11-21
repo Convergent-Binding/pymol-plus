@@ -1,0 +1,21 @@
+# Starlark helpers and build-time tools for the Bazel build of the wheel; see
+# docs/features/bazel-build/.
+
+load("@rules_python//python:defs.bzl", "py_binary")
+load(":shader_gen.bzl", "pymol_generated_headers")
+
+py_binary(
+    name = "generate_headers",
+    srcs = ["generate_headers_main.py"],
+    main = "generate_headers_main.py",
+    deps = ["//scripts/python:create_generated_files_lib"],
+)
+
+# ShaderText.h/.cpp and PyMOLBuildInfo.h, which //:_cmd.so compiles in.
+pymol_generated_headers(
+    name = "pymol_generated_headers",
+    shader_srcs = ["//data/shaders:shader_srcs"],
+    visibility = ["//visibility:public"],
+)
+
+exports_files(["requirements_lock.txt"])

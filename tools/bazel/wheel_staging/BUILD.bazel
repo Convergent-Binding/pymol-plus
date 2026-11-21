@@ -1,0 +1,90 @@
+# The wheel's files that do not live under modules/: _cmd and _champ, under the
+# extension-module names the target interpreter imports, and data/ as
+# pymol/data. py_wheel strips this package's path from them
+# (//tools/bazel/wheel).
+#
+# The names come from //tools/bazel:py_tags.bzl, so they follow the Python
+# version the invocation selected:
+#   macOS    _cmd.cpython-312-darwin.so          (no CPU in darwin's SOABI)
+#   Linux    _cmd.cpython-312-x86_64-linux-gnu.so
+#   Windows  _cmd.cp312-win_amd64.pyd
+
+load("@rules_python//python:defs.bzl", "py_library")
+load("//tools/bazel:py_tags.bzl", "cpython_soabi_prefix", "python_tag")
+load("//tools/bazel:relocate.bzl", "relocate_file", "relocate_tree")
+
+relocate_tree(
+    name = "pymol_data",
+    srcs = ["//data:runtime_data"],
+    dest_prefix = "pymol/data",
+    strip_prefix = "data",
+)
+
+# macOS, arm64 and x86_64 alike.
+relocate_file(
+    name = "cmd_so_macos",
+    src = "//:_cmd.so",
+    out = "pymol/_cmd." + cpython_soabi_prefix() + "-darwin.so",
+)
+
+relocate_file(
+    name = "champ_so_macos",
+    src = "//contrib/champ:_champ.so",
+    out = "chempy/champ/_champ." + cpython_soabi_prefix() + "-darwin.so",
+)
+
+py_library(
+    name = "wheel_staged_files_macos",
+    data = [
+        ":champ_so_macos",
+        ":cmd_so_macos",
+        ":pymol_data",
+    ],
+    visibility = ["//tools/bazel/wheel:__pkg__"],
+)
+
+# Linux x86_64; the SOABI names the CPU.
+relocate_file(
+    name = "cmd_so_linux",
+    src = "//:_cmd.so",
+    out = "pymol/_cmd." + cpython_soabi_prefix() + "-x86_64-linux-gnu.so",
+)
+
+relocate_file(
+    name = "champ_so_linux",
+    src = "//contrib/champ:_champ.so",
+    out = "chempy/champ/_champ." + cpython_soabi_prefix() + "-x86_64-linux-gnu.so",
+)
+
+py_library(
+    name = "wheel_staged_files_linux",
+    data = [
+        ":champ_so_linux",
+        ":cmd_so_linux",
+        ":pymol_data",
+    ],
+    visibility = ["//tools/bazel/wheel:__pkg__"],
+)
+
+# Windows x64.
+relocate_file(
+    name = "cmd_pyd_windows",
+    src = "//:_cmd.so",
+    out = "pymol/_cmd." + python_tag() + "-win_amd64.pyd",
+)
+
+relocate_file(
+    name = "champ_pyd_windows",
+    src = "//contrib/champ:_champ.so",
+    out = "chempy/champ/_champ." + python_tag() + "-win_amd64.pyd",
+)
+
+py_library(
+    name = "wheel_staged_files_windows",
+    data = [
+        ":champ_pyd_windows",
+        ":cmd_pyd_windows",
+        ":pymol_data",
+    ],
+    visibility = ["//tools/bazel/wheel:__pkg__"],
+)

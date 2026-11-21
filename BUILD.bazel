@@ -1,0 +1,89 @@
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load(
+    "//tools/bazel:pymol_native.bzl",
+    "PYMOL_COPTS",
+    "PYMOL_CXXOPTS",
+    "PYMOL_DEFINES",
+    "PYMOL_PLATFORM_LINKOPTS",
+    "PYMOL_PY_LINK_DEPS",
+)
+
+# pyproject.toml is read by //tools/bazel/tests:pyproject_metadata_test, which
+# holds the Starlark reading of it (//tools/bazel:pyproject_repo.bzl) to
+# CPython's tomllib. README.md, LICENSE and AUTHORS go into the wheel's
+# metadata.
+exports_files([
+    "AUTHORS",
+    "LICENSE",
+    "README.md",
+    "pyproject.toml",
+])
+
+# The `_cmd` extension (pymol._cmd, PyInit__cmd in layer4/Cmd.cpp), built from
+# the upstream source layout in place. The globs cover exactly the former CMakeLists.txt's
+# former ALL_SRC list (checked when the Bazel build was introduced); the molfile
+# plugin sources it also listed are //contrib/uiuc/plugins/molfile_plugin/src.
+# A new upstream source file in these directories is compiled automatically.
+cc_binary(
+    name = "_cmd.so",
+    srcs = glob([
+        "layer0/*.cpp",
+        "layer0/*.h",
+        "layer1/*.cpp",
+        "layer1/*.h",
+        "layer2/*.cpp",
+        "layer2/*.h",
+        "layer3/*.cpp",
+        "layer3/*.h",
+        "layer4/*.cpp",
+        "layer4/*.h",
+        "layer5/*.cpp",
+        "layer5/*.h",
+        "layerGraphics/*.h",
+        "layerGraphics/gl/*.cpp",
+        "layerGraphics/gl/*.h",
+        "ov/src/*.cpp",
+        "ov/src/*.h",
+    ]) + [
+        # In `srcs`, not only `deps`: the rule emits ShaderText.cpp beside its
+        # headers, and a label used only for headers would leave that .cpp
+        # uncompiled and the link without `_shader_cache_raw`. Its entry in
+        # `deps` below is what puts the generated headers on the include path.
+        "//tools/bazel:pymol_generated_headers",
+    ],
+    copts = PYMOL_COPTS,
+    cxxopts = PYMOL_CXXOPTS,
+    defines = PYMOL_DEFINES,
+    # the former CMakeLists.txt's ALL_INCLUDE_DIR; include/, contrib/pocketfft and the
+    # molfile headers come with their libraries in `deps`.
+    includes = [
+        "layer0",
+        "layer1",
+        "layer2",
+        "layer3",
+        "layer4",
+        "layer5",
+        "layerGraphics",
+        "layerGraphics/gl",
+        "ov/src",
+    ],
+    linkopts = PYMOL_PLATFORM_LINKOPTS,
+    linkshared = True,
+    linkstatic = True,
+    visibility = ["//visibility:public"],
+    deps = [
+        "//contrib/pocketfft",
+        "//contrib/uiuc/plugins/include:headers",
+        "//contrib/uiuc/plugins/molfile_plugin/src:molfile_plugins",
+        "//include:headers",
+        "//third_party/numpy:headers",
+        "//tools/bazel:pymol_generated_headers",
+        "@freetype",
+        "@glew",
+        "@glm",
+        "@libpng//:png",
+        "@libxml2//:xml2",
+        "@netcdf_c//:netcdf",
+        "@rules_python//python/cc:current_py_cc_headers",
+    ] + PYMOL_PY_LINK_DEPS,
+)

@@ -1,0 +1,101 @@
+load("@pymol_project_metadata//:metadata.bzl", "VERSION")
+load("@rules_cc//cc:defs.bzl", "cc_test")
+load("@rules_python//python:defs.bzl", "py_test")
+
+# Holds //tools/bazel:pyproject.bzl's Starlark reading of pyproject.toml to
+# CPython's tomllib. Pinned to 3.12 because tomllib needs 3.11 and the
+# default toolchain is the 3.10 floor.
+py_test(
+    name = "pyproject_metadata_test",
+    size = "small",
+    srcs = ["pyproject_metadata_test.py"],
+    args = [
+        "$(rootpath @pymol_project_metadata//:metadata.json)",
+        "$(rootpath //:pyproject.toml)",
+    ],
+    data = [
+        "//:pyproject.toml",
+        "@pymol_project_metadata//:metadata.json",
+    ],
+    python_version = "3.12",
+)
+
+# create_buildinfo() writes the SHA and date its caller gives without running
+# git (the Bazel action passes both).
+py_test(
+    name = "create_buildinfo_test",
+    size = "small",
+    srcs = ["create_buildinfo_test.py"],
+    deps = ["//scripts/python:create_generated_files_lib"],
+)
+
+# The shader cache and build info the _cmd extension compiles in.
+py_test(
+    name = "generated_headers_test",
+    size = "small",
+    srcs = ["generated_headers_test.py"],
+    args = [
+        "\"$(rootpaths //tools/bazel:pymol_generated_headers)\"",
+        "\"$(rootpaths //data/shaders:shader_srcs)\"",
+    ],
+    data = [
+        "//data/shaders:shader_srcs",
+        "//tools/bazel:pymol_generated_headers",
+    ],
+)
+
+# The _champ extension links and loads.
+py_test(
+    name = "champ_extension_test",
+    size = "small",
+    srcs = ["champ_extension_test.py"],
+    args = ["$(rootpath //contrib/champ:_champ.so)"],
+    data = ["//contrib/champ:_champ.so"],
+)
+
+# PyMOL imports and runs headless from modules/ with the built extensions and
+# data staged beside the packages.
+py_test(
+    name = "import_smoke_test",
+    size = "small",
+    srcs = ["import_smoke_test.py"],
+    data = [
+        "//modules/chempy:champ_extension_for_run",
+        "//modules/pymol:cmd_extension_for_run",
+        "//modules/pymol:runtime_data_for_run",
+    ],
+    deps = [
+        "//modules/chempy",
+        "//modules/pymol",
+        "//modules/pymol2",
+        "@pymol_pip//numpy",
+    ],
+)
+
+# The host platform's wheel: tags, extension names, members and metadata.
+py_test(
+    name = "wheel_layout_test",
+    size = "small",
+    srcs = ["wheel_layout_test.py"],
+    args = [
+        "\"$(rootpaths //tools/bazel/wheel:wheel)\"",
+        VERSION,
+    ],
+    data = ["//tools/bazel/wheel:wheel"],
+)
+
+# pyproject.toml's in-tree build backend refuses to build with pip.
+py_test(
+    name = "build_backend_test",
+    size = "small",
+    srcs = ["build_backend_test.py"],
+    deps = ["//tools/build_backend"],
+)
+
+# Builds use --compilation_mode=opt (.bazelrc), so the extensions are optimised
+# and assert() is compiled out, as in CMake's Release build.
+cc_test(
+    name = "release_mode_test",
+    size = "small",
+    srcs = ["release_mode_test.cc"],
+)
