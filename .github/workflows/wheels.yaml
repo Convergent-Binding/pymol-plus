@@ -14,12 +14,35 @@
 #Z* -------------------------------------------------------------------
 name: Build Wheels
 
+# The C++ (_cmd) builds take 35-40 minutes, so pull requests only build wheels when
+# they change something that can end up in a wheel. Release tags (v*) and manual runs
+# (Actions > Build Wheels > Run workflow) always build.
 on:
   pull_request:
     branches: [production]
+    paths-ignore:
+      # The ready-to-run app and its workflows and settings
+      - 'distribution/**'
+      - '.github/workflows/build_app.yaml'
+      - '.github/workflows/docs.yaml'
+      - '.github/workflows/dependabot_automerge.yaml'
+      - '.github/dependabot.yml'
+      - '.github/release.yml'
+      - '.github/ISSUE_TEMPLATE/**'
+      # Documentation and AI tooling
+      - 'docs/**'
+      - '**/*.md'
+      - '.agents/**'
+      - '.opencode/**'
+      - '.mailmap'
   workflow_dispatch:
   push:
     tags: ["v*"]
+
+# A newer push to a pull request cancels its outdated wheel build
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
