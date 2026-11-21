@@ -29,6 +29,14 @@ Before declaring completion:
 - Confirm relevant tests and validation checks passed, or clearly state what could not be verified.
 - Report the implemented behavior, files changed, validation performed, and any remaining limitation.
 
+## Repository layout
+
+- The repository root holds the PyMOL sources and the wheel build (`pymol-open-source-whl`).
+- `distribution/` holds the ready-to-run app packaging; for work there, `distribution/AGENTS.md`
+  is the more specific guidance. Its workflows are in the root `.github/workflows/`
+  (`build_app.yaml`, `docs.yaml`).
+- Wheel releases use `v*` tags, app releases `setup-v*` tags.
+
 <!-- codev:start -->
 ## CoDev human-AI delivery
 

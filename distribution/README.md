@@ -49,7 +49,7 @@ The GUI uses Qt 6 (PySide6 6.9) and runs natively on Wayland; `QT_QPA_PLATFORM=x
 
 ## From source
 The following information is about building a platform dependent package/setup from source.
-The GitHub action [build_app.yaml](.github/workflows/build_app.yaml) runs exactly these steps
+The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exactly these steps
 for all three platforms.
 
 ### Prerequisites
@@ -99,23 +99,21 @@ uvx pre-commit install            # before every commit from now on
 ```
 
 ### CI and pull requests
-- Changes reach `main` only through pull requests; the ruleset of `main` requires the green
-  `release` check, which fails if any other CI job failed. "Enable auto-merge" on a pull
-  request merges it (squash) as soon as CI is green, and merged branches are deleted.
+- Changes reach `production` only through pull requests; the ruleset of `production` requires the green
+  `release` check, which fails if any other CI job failed. Every pull request, Dependabot's
+  included, is approved and merged by hand by kullik01 or urban233; nothing merges automatically.
 - A pull request that only changes text files (README, `AGENTS.md`, Dependabot and
-  release-notes settings) skips the app builds (about 1 instead of 8–10 minutes).
+  release-notes settings) or only files outside `distribution/` skips the app builds (about 1 instead of 8–10 minutes).
 - macOS Intel is the slowest job. GitHub supports its Intel runners (`macos-15-intel`) only
   until about August–autumn 2027; then the Intel DMG needs a decision (for example built on
   Apple Silicon, or dropped).
 
 ### Dependency updates (Dependabot)
 Dependabot opens weekly, grouped pull requests for the Python packages, the GitHub Actions
-and the pre-commit hooks, with versions that are at least 14 days old. Minor and patch
-updates merge themselves once CI is green; major updates wait for a review. Such an automatic
-merge does not start a new CI run on `main` (GitHub's rule for its own token); the pull
-request's CI has tested it, and the next push or release tag builds everything again.
+and the pre-commit hooks, with versions that are at least 14 days old. Every update
+waits for a review and is merged by hand, like any other pull request.
 Deliberate limits:
-- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request without auto-merge,
+- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request,
   because the files in `edited/` must be ported to the new version first (the build stops
   until `EDITED_FOR_PYMOL_WHL_VERSION` in `automations/build_exe.py` matches).
 - **PySide6/shiboken6** stay at 6.9: 6.10 and newer need macOS 13 and glibc 2.34, which
@@ -127,14 +125,14 @@ The version in [pyproject.toml](pyproject.toml) is the only place to change. The
 the file names and the website (version, file names and download links) all use it.
 
 1. Change the version in `pyproject.toml` in a pull request and merge it.
-2. Tag the merged commit on `main` with the version and push the tag:
+2. Tag the merged commit on `production` with the version and push the tag:
    ```shell
-   git tag v<version> && git push origin v<version>
+   git tag setup-v<version> && git push origin setup-v<version>
    ```
 3. The GitHub action builds and tests everything and creates a **draft** release with
    all files. It fails if the tag does not match the version or if the website download
    links do not match the built files.
-4. Check the draft on the [releases page](https://github.com/kullik01/pymol-open-source-setup/releases)
+4. Check the draft on the [releases page](https://github.com/kullik01/pymol-plus/releases)
    and publish it. Publishing the release also publishes the website.
 
 Before publishing, test once by hand what CI cannot (with the files of the draft release):
@@ -151,7 +149,7 @@ Tested releases:
 
 The website is only published for published releases. To publish website changes
 without a release, run the "Build Docs" action manually (Actions > Build Docs > Run workflow)
-on the tag of the latest release or on `main` (only if its version is already released).
+on the tag of the latest release or on `production` (only if its version is already released).
 
 ## License
 - **Open-Source PyMOL:** Copyright (c) [Schrodinger, LLC](https://www.schrodinger.com/), published under

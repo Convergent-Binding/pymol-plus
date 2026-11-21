@@ -13,8 +13,9 @@
 This repository offers **unofficial** binary wheels for the open-source version of PyMOL(TM)
 for **all major** operating systems.
 These wheel files are intended for use in a Python project.
-If you are searching for PyMOL as ready-to-use application go to 
-this repository: [pymol-open-source-setup](https://github.com/kullik01/pymol-open-source-setup).
+If you are searching for PyMOL as ready-to-use application, see
+[distribution/](distribution/README.md) (formerly
+[pymol-open-source-setup](https://github.com/kullik01/pymol-open-source-setup)).
 
 ## Contents of this document
 * [About PyMOL](#About-PyMOL)
@@ -36,6 +37,19 @@ this repository: [pymol-open-source-setup](https://github.com/kullik01/pymol-ope
 Please note that the files provided here are **unofficial**. They are informal, unrecognized, and unsupported, offered for testing and evaluation purposes only. No warranty or liability is provided, and the software is made available "as-is."
 
 ## Contents of this repository
+This repository is a fork of [schrodinger/pymol-open-source](https://github.com/schrodinger/pymol-open-source)
+and combines two former repositories with their full git history:
+
+| Path | Content | Former repository |
+|------|---------|-------------------|
+| `/` (everything except `distribution/`) | PyMOL sources and the wheel build | [urban233/pymol-open-source-whl](https://github.com/urban233/pymol-open-source-whl) |
+| `distribution/` | Ready-to-run apps: Windows installer, macOS DMGs, Linux packages ([README](distribution/README.md)) | [kullik01/pymol-open-source-setup](https://github.com/kullik01/pymol-open-source-setup) |
+
+The history of `distribution/` was rewritten into that folder; each of its commits names the
+original commit in an `Original-commit:` line. Wheel releases use `v*` tags, app releases
+`setup-v*` tags. Updates from Schrödinger arrive by syncing the fork's `master` branch and
+merging it into `production`.
+
 ### Scripts
 There is one Python script that is used for building PyMOL specific shader files.
 
