@@ -163,3 +163,12 @@ pip.parse(
 )
 
 use_repo(pip, "pymol_pip")
+
+# The uv binary //tools/bazel:requirements locks requirements_lock.txt with,
+# fetched by rules_python; the version rules_python 2.3.2 itself uses.
+uv = use_extension(
+    "@rules_python//python/uv:uv.bzl",
+    "uv",
+    dev_dependency = True,
+)
+uv.configure(version = "0.11.2")

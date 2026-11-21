@@ -29,19 +29,7 @@ dependencies = [
   "numpy>=2.2",
 ]
 
-[dependency-groups]
-dev = [
-  "delvewheel",
-  "pillow==10.3.0",
-  "pytest==8.3.5",
-]
-
 [project.urls]
 # Homepage = "https://pymol.org"
 Documentation = "https://pymolwiki.org/index.php/Main_Page"
 Repository = "https://github.com/urban233/pymol-open-source-whl"
-
-# uv installs the dependencies and the dev group without building this project,
-# which only Bazel can build; `pymake test` installs the Bazel-built wheel.
-[tool.uv]
-package = false

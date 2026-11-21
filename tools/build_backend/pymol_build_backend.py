@@ -26,10 +26,6 @@ Select the Python version with, for example:
 
     --@rules_python//python/config_settings:python_version=3.13
 
-or use the task runner, which builds for the running interpreter:
-
-    ./pymake.sh build_wheel        (pymake.bat on Windows)
-
 The built wheel installs with pip in the normal way:
 
     pip install bazel-bin/tools/bazel/wheel/pymol_open_source_whl-*.whl
