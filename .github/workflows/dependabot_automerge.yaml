@@ -1,8 +1,8 @@
 name: Dependabot auto-merge
 
 # Turns on auto-merge for Dependabot's minor and patch updates: GitHub then merges them
-# (squash) as soon as the 'release' check required by the ruleset of 'main' is green.
-# Major updates and the PyMOL wheel (the files in edited/ must be ported first) stay manual.
+# (squash) as soon as the 'release' check required by the ruleset of 'production' is green.
+# Major updates and the PyMOL wheel (the files in distribution/edited/ must be ported first) stay manual.
 on: pull_request
 
 permissions:

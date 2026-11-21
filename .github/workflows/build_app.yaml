@@ -17,11 +17,17 @@ name: Build app packages
 on:
   push:
     branches:
-      - master
-      - main
-    # A version tag (v<version from pyproject.toml>) creates a draft release
+      - production
+    # A version tag (setup-v<version from distribution/pyproject.toml>) creates a draft
+    # release; plain v* tags belong to the PyMOL wheel (wheels.yaml)
     tags:
-      - 'v*'
+      - 'setup-v*'
+    # Branch pushes only build when the app changed (GitHub ignores paths for tags)
+    paths:
+      - 'distribution/**'
+      - '.github/workflows/build_app.yaml'
+  # No paths filter: the 'release' check must exist on every pull request; the
+  # 'changes' job below skips the builds when the app is not affected
   pull_request:
   workflow_dispatch:
 
@@ -33,6 +39,11 @@ concurrency:
 permissions:
   contents: read
 
+# The app (formerly pymol-open-source-setup) lives in distribution/
+defaults:
+  run:
+    working-directory: distribution
+
 env:
   # More robust against temporary network problems with PyPI
   # uv (./automator.sh setup) uses the Python of actions/setup-python, which gets bundled into the app
@@ -42,8 +53,9 @@ env:
 
 jobs:
   # ----- Which parts a change affects: a pull request that only changes text files
-  # (README, AI notes, Dependabot and release-notes settings) skips the app builds.
-  # Pushes to main and version tags always build everything.
+  # (README, AI notes, Dependabot and release-notes settings) or files outside
+  # distribution/ (the PyMOL wheel) skips the app builds.
+  # Pushes to production and version tags always build everything.
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -57,18 +69,21 @@ jobs:
       - name: Check whether the app has to be built
         id: filter
         env:
-          TEXT_ONLY: '^(README\.md|AGENTS\.md|CLAUDE\.md|\.opp/.*|\.github/dependabot\.yml|\.github/release\.yml)$'
+          APP_FILES: '^(distribution/|\.github/workflows/build_app\.yaml$)'
+          TEXT_ONLY: '^distribution/(README\.md|AGENTS\.md|CLAUDE\.md|\.opp/.*)$'
         run: |
           BUILD=true
           # The checked-out merge commit's first parent is the base branch
-          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && ! git diff --name-only HEAD^1 HEAD | grep -qvE "$TEXT_ONLY"; then
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] \
+            && ! git diff --name-only HEAD^1 HEAD | grep -E "$APP_FILES" | grep -qvE "$TEXT_ONLY"; then
             BUILD=false
           fi
           echo "build=${BUILD}" | tee -a "$GITHUB_OUTPUT"
   # --- end
 
   # ----- Quick checks: Python (ruff), shell scripts (shellcheck) and workflows (actionlint),
-  # configured in .pre-commit-config.yaml
+  # configured in distribution/.pre-commit-config.yaml; they check the app's files and
+  # workflows only, not the PyMOL wheel sources
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -85,10 +100,14 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+          key: pre-commit-${{ hashFiles('distribution/.pre-commit-config.yaml') }}
 
       - name: Run the checks
-        run: uvx pre-commit@4.7.0 run --all-files --show-diff-on-failure
+        # pre-commit runs from the repository root, so the files are given explicitly
+        run: |
+          git ls-files -z . ../.github/workflows/build_app.yaml ../.github/workflows/docs.yaml \
+            ../.github/workflows/dependabot_automerge.yaml \
+            | xargs -0 uvx pre-commit@4.7.0 run --config .pre-commit-config.yaml --show-diff-on-failure --files
 
       - name: Validate the Linux desktop entry and AppStream metadata
         run: |
@@ -111,6 +130,7 @@ jobs:
     defaults:
       run:
         shell: bash
+        working-directory: distribution
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -118,7 +138,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: '.python-version'
+          python-version-file: 'distribution/.python-version'
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v10.3.3
@@ -178,15 +198,17 @@ jobs:
         shell: cmd
         run: win_automator.bat build packages
 
+      - name: Download the latest published release (update test)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tests/download_previous_release.sh "$(cygpath -u "$RUNNER_TEMP")/previous" '*setup.exe'
+
       - name: Install the latest published release (update test)
         # The new installer below must replace it. On the runner it installs with
         # administrator rights, like an old installation "for all users".
         timeout-minutes: 15
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download --pattern '*setup.exe' --dir "$env:RUNNER_TEMP\previous"
           $setup = Get-ChildItem "$env:RUNNER_TEMP\previous\*setup.exe" | Select-Object -First 1
           $process = Start-Process $setup.FullName -Wait -PassThru `
             -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/LOG=$env:RUNNER_TEMP\previous.log"
@@ -263,7 +285,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: PyMOL-Open-Source-Windows-x64-Setup
-          path: os_specific/dist/*
+          path: distribution/os_specific/dist/*
           # The packages are already compressed
           compression-level: 0
   # --- end
@@ -288,7 +310,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: '.python-version'
+          python-version-file: 'distribution/.python-version'
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v10.3.3
@@ -354,7 +376,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: PyMOL-Open-Source-macOS-${{ matrix.label }}-Setup
-          path: os_specific/dist/*.dmg
+          path: distribution/os_specific/dist/*.dmg
           # The packages are already compressed
           compression-level: 0
   # --- end
@@ -372,7 +394,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: '.python-version'
+          python-version-file: 'distribution/.python-version'
 
       - name: Setup uv
         uses: astral-sh/setup-uv@v10.3.3
@@ -402,21 +424,21 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: PyMOL-Open-Source-GNU-Linux-x86_64-Setup
-          path: os_specific/dist/*
+          path: distribution/os_specific/dist/*
           # The packages are already compressed
           compression-level: 0
 
       - name: Download the latest published release (update test)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release download --pattern '*.deb' --pattern '*.rpm' --dir previous-release
+        run: tests/download_previous_release.sh previous-release '*.deb' '*.rpm'
 
       - name: Upload the latest published release
         # Not named PyMOL-Open-Source-*, so it never ends up in a new release
         uses: actions/upload-artifact@v7
         with:
           name: previous-linux-packages
-          path: previous-release/*
+          path: distribution/previous-release/*
           compression-level: 0
 
   # Installs the packages on clean distributions (the package manager has to
@@ -447,19 +469,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
-          sparse-checkout: tests
+          sparse-checkout: distribution/tests
 
       - name: Download packages
         uses: actions/download-artifact@v8
         with:
           name: PyMOL-Open-Source-GNU-Linux-x86_64-Setup
-          path: packages
+          path: distribution/packages
 
       - name: Download the latest published release
         uses: actions/download-artifact@v8
         with:
           name: previous-linux-packages
-          path: previous
+          path: distribution/previous
 
       - name: Install package over the latest release and run smoke tests
         timeout-minutes: 15
@@ -485,20 +507,20 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Check that the tag matches the version
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: startsWith(github.ref, 'refs/tags/setup-v')
         run: |
           VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)"
-          if [ "$GITHUB_REF_NAME" != "v${VERSION}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match version ${VERSION} in pyproject.toml" >&2
+          if [ "$GITHUB_REF_NAME" != "setup-v${VERSION}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match version ${VERSION} in distribution/pyproject.toml" >&2
             exit 1
           fi
 
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: '.python-version'
+          python-version-file: 'distribution/.python-version'
           cache: 'pip'
-          cache-dependency-path: 'docs/website/requirements.txt'
+          cache-dependency-path: 'distribution/docs/website/requirements.txt'
 
       - name: Build website
         run: |
@@ -518,7 +540,7 @@ jobs:
   # which can be checked and published on GitHub.
   release:
     needs: [changes, checks, website, build-windows, build-macos, build-gnu-linux, test-gnu-linux-packages]
-    # The ruleset of 'main' requires this check. It runs even if a job failed or was
+    # The ruleset of 'production' should require this check. It runs even if a job failed or was
     # skipped and fails if any job failed, because a skipped check counts as passed.
     # A cancelled run (a newer push to the same pull request) skips it.
     if: ${{ !cancelled() }}
@@ -543,14 +565,14 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: website
-          path: site
+          path: distribution/site
 
       - name: Download packages
         if: env.BUILD == 'true'
         uses: actions/download-artifact@v8
         with:
           pattern: PyMOL-Open-Source-*
-          path: release-files
+          path: distribution/release-files
           merge-multiple: true
 
       - name: Check website download links against the packages
@@ -558,7 +580,7 @@ jobs:
         run: (cd release-files && printf '%s\n' *) | tests/check_release_assets.sh site
 
       - name: Create draft release
-        if: env.BUILD == 'true' && startsWith(github.ref, 'refs/tags/v')
+        if: env.BUILD == 'true' && startsWith(github.ref, 'refs/tags/setup-v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
