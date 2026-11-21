@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo/pymolplus-logo-loop-black.svg">
+    <img src="assets/logo/pymolplus-logo-loop-beige.svg" alt="PyMOL+: a tryptophan in a peptide chain is drawn stick by stick, then PyMOL and a plus appear beside it" width="100%">
+  </picture>
+</p>
+
 # Unofficial PyMOL(TM) Python wheel files
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-blue.svg)](https://GitHub.com/urban233/pymol-open-source-whl/graphs/commit-activity)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
