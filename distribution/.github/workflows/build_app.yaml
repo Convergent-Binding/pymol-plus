@@ -1,0 +1,578 @@
+#A* -------------------------------------------------------------------
+#B* This file contains source code for running a GitHub automation
+#-* related to the build process of the PyMOL computer program
+#C* Copyright 2026 by Martin Urban.
+#D* -------------------------------------------------------------------
+#E* It is unlawful to modify or remove this copyright notice.
+#F* -------------------------------------------------------------------
+#G* Please see the accompanying LICENSE file for further information.
+#H* -------------------------------------------------------------------
+#I* Additional authors of this source file include:
+#-* Hannah Kullik
+#-*
+#-*
+#Z* -------------------------------------------------------------------
+name: Build app packages
+
+on:
+  push:
+    branches:
+      - master
+      - main
+    # A version tag (v<version from pyproject.toml>) creates a draft release
+    tags:
+      - 'v*'
+  pull_request:
+  workflow_dispatch:
+
+# Cancel outdated runs of the same pull request
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # More robust against temporary network problems with PyPI
+  # uv (./automator.sh setup) uses the Python of actions/setup-python, which gets bundled into the app
+  UV_PYTHON_PREFERENCE: only-system
+  # The smoke tests also download a structure from the PDB (HTTPS)
+  PYMOL_SMOKE_TEST_ONLINE: "1"
+
+jobs:
+  # ----- Which parts a change affects: a pull request that only changes text files
+  # (README, AI notes, Dependabot and release-notes settings) skips the app builds.
+  # Pushes to main and version tags always build everything.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.filter.outputs.build }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Check whether the app has to be built
+        id: filter
+        env:
+          TEXT_ONLY: '^(README\.md|AGENTS\.md|CLAUDE\.md|\.opp/.*|\.github/dependabot\.yml|\.github/release\.yml)$'
+        run: |
+          BUILD=true
+          # The checked-out merge commit's first parent is the base branch
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && ! git diff --name-only HEAD^1 HEAD | grep -qvE "$TEXT_ONLY"; then
+            BUILD=false
+          fi
+          echo "build=${BUILD}" | tee -a "$GITHUB_OUTPUT"
+  # --- end
+
+  # ----- Quick checks: Python (ruff), shell scripts (shellcheck) and workflows (actionlint),
+  # configured in .pre-commit-config.yaml
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.3.3
+        with:
+          # The pre-commit cache below is the one this job uses
+          enable-cache: false
+
+      - name: Cache the check tools
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run the checks
+        run: uvx pre-commit@4.7.0 run --all-files --show-diff-on-failure
+
+      - name: Validate the Linux desktop entry and AppStream metadata
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq appstream desktop-file-utils > /dev/null
+          desktop-file-validate os_specific/linux/pymol-open-source.desktop
+          METAINFO="io.github.kullik01.pymol-open-source.metainfo.xml"
+          sed -e "s|@VERSION@|1.0|" -e "s|@DATE@|2026-01-01|" "os_specific/linux/${METAINFO}" > "${RUNNER_TEMP}/${METAINFO}"
+          appstreamcli validate --pedantic --no-net "${RUNNER_TEMP}/${METAINFO}"
+  # --- end
+
+  # ----- Windows build section
+  build-windows:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: windows-latest
+    env:
+      # Uninstall entry of the installer (AppId in os_specific/windows/inno_setup/setup.iss)
+      UNINSTALL_KEY: 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{192F52C3-D86D-4735-9929-C7DF593CB534}_is1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Extract project and Python version
+        run: |
+          echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
+          echo "PYTHON_VERSION=$(cat .python-version)" >> "$GITHUB_ENV"
+
+      - name: Create virtual environment
+        shell: cmd
+        run: win_automator.bat setup
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe -OutFile "$env:RUNNER_TEMP\innosetup.exe"
+          # SHA-256 published by GitHub for the release file
+          $hash = (Get-FileHash "$env:RUNNER_TEMP\innosetup.exe" -Algorithm SHA256).Hash
+          if ($hash -ne '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0') { throw "Unexpected SHA-256 of the Inno Setup installer: $hash" }
+          Start-Process -FilePath "$env:RUNNER_TEMP\innosetup.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/ALLUSERS' -Wait
+
+      - name: Cache the Microsoft C++ runtime
+        # cx_Freeze downloads it from Microsoft once; the cache keeps builds reproducible.
+        # Change the key to take a newer runtime.
+        uses: actions/cache@v6
+        with:
+          path: ~\AppData\Roaming\cxfreeze\vc_redist
+          key: msvc-runtime-17-v1
+
+      - name: Build frozen application
+        # Also downloads the Microsoft C++ runtime (if not cached), which is bundled into the app
+        timeout-minutes: 30
+        shell: cmd
+        run: win_automator.bat build app
+
+      - name: Check the bundled C++ runtime
+        run: .venv/Scripts/python tests/check_msvc_runtime.py "dist/exe.win-amd64-${PYTHON_VERSION}"
+
+      - name: Smoke test
+        timeout-minutes: 5
+        shell: cmd
+        run: win_automator.bat test
+
+      - name: GUI smoke test
+        timeout-minutes: 5
+        # The runner has no GPU (only OpenGL 1.1). Test a copy of the app with the bundled
+        # software OpenGL (Mesa) as opengl32.dll, like the troubleshooting note on the website;
+        # the copy keeps the DLL out of the installer and the ZIP.
+        run: |
+          GUI_TEST_DIR="$(cygpath -u "$RUNNER_TEMP")/gui-test"
+          cp -r "dist/exe.win-amd64-${PYTHON_VERSION}" "$GUI_TEST_DIR"
+          cp "$GUI_TEST_DIR/opengl32sw.dll" "$GUI_TEST_DIR/opengl32.dll"
+          tests/run_smoke_test.sh --gui "$GUI_TEST_DIR/PyMOL-Open-Source.exe"
+
+      - name: Build installer
+        shell: cmd
+        run: win_automator.bat build packages
+
+      - name: Install the latest published release (update test)
+        # The new installer below must replace it. On the runner it installs with
+        # administrator rights, like an old installation "for all users".
+        timeout-minutes: 15
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download --pattern '*setup.exe' --dir "$env:RUNNER_TEMP\previous"
+          $setup = Get-ChildItem "$env:RUNNER_TEMP\previous\*setup.exe" | Select-Object -First 1
+          $process = Start-Process $setup.FullName -Wait -PassThru `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/LOG=$env:RUNNER_TEMP\previous.log"
+          if ($process.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\previous.log"; throw "Setup of $($setup.Name) failed: $($process.ExitCode)" }
+          Write-Output "Installed $($setup.Name)"
+
+      - name: Install with the installer
+        # Per-user install like on a user's PC (Git Bash would turn /VERYSILENT into a path)
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem "os_specific/dist/*_x64_setup.exe" | Select-Object -First 1
+          $process = Start-Process $setup.FullName -Wait -PassThru `
+            -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/LOG=$env:RUNNER_TEMP\install.log"
+          if ($process.ExitCode -ne 0) { Get-Content "$env:RUNNER_TEMP\install.log"; throw "Setup failed: $($process.ExitCode)" }
+          $exe = Join-Path $env:APPDATA "PyMOL-Open-Source\bin\PyMOL-Open-Source.exe"
+          if (-not (Test-Path $exe)) { throw "Not installed: $exe" }
+          foreach ($folder in [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) {
+            if (-not (Test-Path (Join-Path $folder 'PyMOL-Open-Source.lnk'))) { throw "Shortcut missing in $folder" }
+          }
+          foreach ($folder in [Environment]::GetFolderPath('CommonDesktopDirectory'), [Environment]::GetFolderPath('CommonPrograms'), [Environment]::GetFolderPath('CommonStartMenu')) {
+            if (Test-Path (Join-Path $folder 'PyMOL-Open-Source.lnk')) { throw "Shortcut in the All Users folder $folder" }
+          }
+          $version = (Get-ItemProperty $env:UNINSTALL_KEY).DisplayVersion
+          if ($version -ne $env:PROJECT_VERSION) { throw "Uninstall entry has version '$version'" }
+          # Only the new version remains: no entry for all users, no old program or shortcuts
+          $allUsersKey = $env:UNINSTALL_KEY -replace '^HKCU:', 'HKLM:'
+          if (Test-Path $allUsersKey) { throw "The previous version is still installed for all users" }
+          if (Test-Path (Join-Path (Split-Path $exe) 'Open-Source-PyMOL.exe')) { throw "Old program file left" }
+          foreach ($folder in [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'), [Environment]::GetFolderPath('CommonDesktopDirectory'), [Environment]::GetFolderPath('CommonPrograms')) {
+            if (Test-Path (Join-Path $folder 'Open-Source PyMOL.lnk')) { throw "Old shortcut left in $folder" }
+          }
+          # File types: the open command starts the installed app
+          $command = (Get-ItemProperty 'HKCU:\Software\Classes\OpenSourcePyMOL.File\shell\open\command').'(default)'
+          if ($command -ne "`"$exe`" `"%1`"") { throw "Unexpected open command: $command" }
+          foreach ($ext in '.pdb', '.cif', '.pse') {
+            if ($null -eq (Get-ItemProperty "HKCU:\Software\Classes\$ext\OpenWithProgids").'OpenSourcePyMOL.File') { throw "$ext not registered" }
+          }
+          "INSTALLED_APP=$exe" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
+      - name: Smoke test of the installed app
+        timeout-minutes: 5
+        run: tests/run_smoke_test.sh "$(cygpath -u "$INSTALLED_APP")"
+
+      - name: Uninstall
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $app = Join-Path $env:APPDATA "PyMOL-Open-Source"
+          # The uninstaller the Apps settings use (its number can change, e.g. unins001.exe after an update)
+          $uninstaller = (Get-ItemProperty $env:UNINSTALL_KEY).UninstallString.Trim('"')
+          Start-Process $uninstaller -Wait -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'
+          # The uninstaller restarts itself from %TEMP%, so wait until the folder is gone
+          for ($i = 0; $i -lt 60 -and (Test-Path $app); $i++) { Start-Sleep -Seconds 2 }
+          if (Test-Path $app) { throw "Not uninstalled: $app" }
+          foreach ($folder in [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) {
+            if (Test-Path (Join-Path $folder 'PyMOL-Open-Source.lnk')) { throw "Shortcut left in $folder" }
+          }
+          if (Test-Path $env:UNINSTALL_KEY) { throw "Uninstall entry left" }
+          if (Test-Path 'HKCU:\Software\Classes\OpenSourcePyMOL.File') { throw "File type registration left" }
+          if ((Get-ItemProperty 'HKCU:\Software\Classes\.pse' -ErrorAction SilentlyContinue).'(default)' -eq 'OpenSourcePyMOL.File') { throw ".pse association left" }
+
+      - name: Create portable archive
+        run: 7z a -tzip -bso0 -bsp0 "os_specific/dist/PyMOL-Open-Source_v${PROJECT_VERSION}_x64_portable.zip" "./dist/exe.win-amd64-${PYTHON_VERSION}/*"
+
+      - name: Test portable archive
+        timeout-minutes: 5
+        run: |
+          PORTABLE_DIR="${RUNNER_TEMP}/portable"
+          7z x -bso0 -bsp0 -o"${PORTABLE_DIR}" "os_specific/dist/PyMOL-Open-Source_v${PROJECT_VERSION}_x64_portable.zip"
+          tests/run_smoke_test.sh "${PORTABLE_DIR}/PyMOL-Open-Source.exe"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PyMOL-Open-Source-Windows-x64-Setup
+          path: os_specific/dist/*
+          # The packages are already compressed
+          compression-level: 0
+  # --- end
+
+  # ----- macOS build section
+  build-macos:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-15, arch: arm64, label: AppleSilicon }
+          # Last Intel (x86_64) runner image of GitHub, supported until August 2027
+          - { runner: macos-15-intel, arch: x86_64, label: Intel }
+    name: build-macos (${{ matrix.label }})
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Extract project version
+        run: echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
+
+      - name: Create virtual environment
+        run: ./automator.sh setup
+
+      - name: Build app bundle
+        run: ./automator.sh build app
+
+      - name: Ad-hoc sign app bundle
+        # Prevents Gatekeeper "damaged app" errors
+        run: codesign --force --deep --sign - "dist/PyMOL-Open-Source.app"
+
+      - name: Smoke test
+        timeout-minutes: 5
+        run: |
+          ./automator.sh test
+          tests/run_smoke_test.sh --gui "dist/PyMOL-Open-Source.app/Contents/MacOS/PyMOL-Open-Source"
+          codesign --verify --deep "dist/PyMOL-Open-Source.app"
+
+      - name: Install create-dmg
+        env:
+          CREATE_DMG_VERSION: "1.3.0"
+          CREATE_DMG_SHA256: "c50d2bc97c3d6292642bac55f530d247eaf4bf65ee605f26b4caf339383e381c"
+        run: |
+          curl -fsSL -o "${RUNNER_TEMP}/create-dmg.tar.gz" "https://github.com/create-dmg/create-dmg/archive/refs/tags/v${CREATE_DMG_VERSION}.tar.gz"
+          echo "${CREATE_DMG_SHA256}  ${RUNNER_TEMP}/create-dmg.tar.gz" | shasum -a 256 -c -
+          tar -xzf "${RUNNER_TEMP}/create-dmg.tar.gz" -C "${RUNNER_TEMP}"
+          echo "CREATE_DMG=${RUNNER_TEMP}/create-dmg-${CREATE_DMG_VERSION}/create-dmg" >> "$GITHUB_ENV"
+
+      - name: Build DMG
+        run: ./automator.sh build packages
+
+      - name: Verify DMG
+        # Mounts the DMG like a user would and tests the app inside it
+        timeout-minutes: 5
+        run: |
+          DMGS=(os_specific/dist/*.dmg)
+          test "${#DMGS[@]}" -eq 1
+          DMG="${DMGS[0]}"
+          hdiutil verify "$DMG"
+          MOUNT_DIR="$(mktemp -d)"
+          hdiutil attach "$DMG" -readonly -nobrowse -mountpoint "$MOUNT_DIR"
+          trap 'hdiutil detach "$MOUNT_DIR"' EXIT
+          ls -la "$MOUNT_DIR"
+          test -L "$MOUNT_DIR/Applications"
+          test -f "$MOUNT_DIR/.background/dmg_background.svg"
+          APP="$MOUNT_DIR/PyMOL-Open-Source.app"
+          codesign --verify --deep "$APP"
+          plutil -lint "$APP/Contents/Info.plist"
+          test "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")" = "io.github.kullik01.pymol-open-source"
+          # File types (.pdb, .cif, .pse) that open with PyMOL in Finder
+          test "$(plutil -extract UTExportedTypeDeclarations.0.UTTypeIdentifier raw "$APP/Contents/Info.plist")" = "io.github.kullik01.pymol-open-source.pse"
+          # PyMOL is built for this runner's architecture (build_dmg.sh checks that Qt and numpy match it)
+          test "$(lipo -archs "$APP"/Contents/Resources/lib/pymol/_cmd.*.so)" = "${{ matrix.arch }}"
+          tests/run_smoke_test.sh "$APP/Contents/MacOS/PyMOL-Open-Source"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PyMOL-Open-Source-macOS-${{ matrix.label }}-Setup
+          path: os_specific/dist/*.dmg
+          # The packages are already compressed
+          compression-level: 0
+  # --- end
+
+  # ----- GNU Linux build section
+  build-gnu-linux:
+    # The oldest available runner, so the app also runs on older distributions
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.3.3
+
+      - name: Create virtual environment
+        run: ./automator.sh setup
+
+      - name: Install system packages
+        # libxcb-cursor is bundled into the app for Qt's X11 support (RHEL/Alma 8 only have
+        # it in EPEL); rpm and fpm build the packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxcb-cursor0 rpm
+          sudo gem install --no-document fpm -v 1.18.0
+
+      - name: Build frozen application
+        run: ./automator.sh build app
+
+      - name: Smoke test
+        timeout-minutes: 5
+        run: ./automator.sh test
+
+      - name: Build .tar.gz, .deb and .rpm packages
+        run: ./automator.sh build packages
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: PyMOL-Open-Source-GNU-Linux-x86_64-Setup
+          path: os_specific/dist/*
+          # The packages are already compressed
+          compression-level: 0
+
+      - name: Download the latest published release (update test)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download --pattern '*.deb' --pattern '*.rpm' --dir previous-release
+
+      - name: Upload the latest published release
+        # Not named PyMOL-Open-Source-*, so it never ends up in a new release
+        uses: actions/upload-artifact@v7
+        with:
+          name: previous-linux-packages
+          path: previous-release/*
+          compression-level: 0
+
+  # Installs the packages on clean distributions (the package manager has to
+  # resolve all declared dependencies) and runs the headless and GUI smoke tests.
+  test-gnu-linux-packages:
+    needs: build-gnu-linux
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: 'ubuntu:22.04', package: 'deb' }
+          - { image: 'ubuntu:24.04', package: 'deb' }
+          - { image: 'debian:12', package: 'deb' }
+          - { image: 'fedora:latest', package: 'rpm' }
+          - { image: 'rockylinux/rockylinux:9', package: 'rpm' }
+          - { image: 'almalinux:8', package: 'rpm' }
+          - { image: 'registry.opensuse.org/opensuse/tumbleweed:latest', package: 'rpm' }
+          # The Leap image has no tar, which actions/checkout needs
+          - { image: 'registry.opensuse.org/opensuse/leap:15.6', package: 'rpm', setup: 'zypper --non-interactive install tar gzip' }
+    name: test-gnu-linux-packages (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install checkout prerequisites
+        if: matrix.setup
+        run: ${{ matrix.setup }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: tests
+
+      - name: Download packages
+        uses: actions/download-artifact@v8
+        with:
+          name: PyMOL-Open-Source-GNU-Linux-x86_64-Setup
+          path: packages
+
+      - name: Download the latest published release
+        uses: actions/download-artifact@v8
+        with:
+          name: previous-linux-packages
+          path: previous
+
+      - name: Install package over the latest release and run smoke tests
+        timeout-minutes: 15
+        shell: bash
+        run: tests/test_linux_package.sh packages/*.${{ matrix.package }} previous/*.${{ matrix.package }}
+  # --- end
+
+  # ----- Website section
+  # Builds the website strictly, in parallel to the app builds. For a version
+  # tag it first checks that the tag matches the version, so a wrong tag fails
+  # right at the start.
+  website:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    env:
+      # More robust against temporary network problems with PyPI
+      PIP_DEFAULT_TIMEOUT: "60"
+      PIP_RETRIES: "10"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Check that the tag matches the version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)"
+          if [ "$GITHUB_REF_NAME" != "v${VERSION}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match version ${VERSION} in pyproject.toml" >&2
+            exit 1
+          fi
+
+      - name: Setup Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: '.python-version'
+          cache: 'pip'
+          cache-dependency-path: 'docs/website/requirements.txt'
+
+      - name: Build website
+        run: |
+          python -m pip install -r docs/website/requirements.txt
+          mkdocs build --strict --config-file docs/website/mkdocs.yml --site-dir "${RUNNER_TEMP}/site"
+
+      - name: Upload website
+        uses: actions/upload-artifact@v7
+        with:
+          name: website
+          path: ${{ runner.temp }}/site
+  # --- end
+
+  # ----- Release section
+  # Checks on every run that the website download links and the built files
+  # match. For a version tag it also creates a draft release with all files,
+  # which can be checked and published on GitHub.
+  release:
+    needs: [changes, checks, website, build-windows, build-macos, build-gnu-linux, test-gnu-linux-packages]
+    # The ruleset of 'main' requires this check. It runs even if a job failed or was
+    # skipped and fails if any job failed, because a skipped check counts as passed.
+    # A cancelled run (a newer push to the same pull request) skips it.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      BUILD: ${{ needs.changes.outputs.build }}
+    steps:
+      - name: Fail if a job failed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: |
+          echo "A job failed or was cancelled." >&2
+          exit 1
+
+      - name: Checkout repository
+        if: env.BUILD == 'true'
+        uses: actions/checkout@v7
+
+      - name: Download website
+        if: env.BUILD == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          name: website
+          path: site
+
+      - name: Download packages
+        if: env.BUILD == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: PyMOL-Open-Source-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Check website download links against the packages
+        if: env.BUILD == 'true'
+        run: (cd release-files && printf '%s\n' *) | tests/check_release_assets.sh site
+
+      - name: Create draft release
+        if: env.BUILD == 'true' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Empty if there is no release for the tag yet (the list includes drafts)
+          IS_DRAFT="$(gh release list --limit 100 --json tagName,isDraft \
+            --jq ".[] | select(.tagName == \"${GITHUB_REF_NAME}\") | .isDraft")"
+          if [ -z "$IS_DRAFT" ]; then
+            gh release create "$GITHUB_REF_NAME" release-files/* \
+              --draft --verify-tag --generate-notes --title "Release ${GITHUB_REF_NAME}"
+          elif [ "$IS_DRAFT" = "true" ]; then
+            # A re-run replaces the files of the draft release
+            gh release upload "$GITHUB_REF_NAME" release-files/* --clobber
+          else
+            echo "Release ${GITHUB_REF_NAME} is already published; its files are not replaced." >&2
+            exit 1
+          fi
+  # --- end
