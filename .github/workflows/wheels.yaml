@@ -25,7 +25,6 @@ on:
       - 'distribution/**'
       - '.github/workflows/build_app.yaml'
       - '.github/workflows/docs.yaml'
-      - '.github/workflows/dependabot_automerge.yaml'
       - '.github/dependabot.yml'
       - '.github/release.yml'
       - '.github/ISSUE_TEMPLATE/**'

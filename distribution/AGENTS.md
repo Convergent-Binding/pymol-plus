@@ -35,7 +35,8 @@ macOS DMGs (Apple Silicon, Intel), Linux .tar.gz/.deb/.rpm. Details in README.md
 - Linux packages on 8 distributions: `tests/test_linux_package.sh <package>` in a container
 
 **Rules:**
-- Changes reach `production` only through pull requests; Hannah merges. The ruleset of `production` requires
+- Changes reach `production` only through pull requests, Dependabot's included; Hannah (kullik01)
+  or Martin (urban233) approves and merges by hand, nothing merges automatically. The ruleset of `production` requires
   the green `release` check; merged branches are deleted automatically.
 - The version lives only in `pyproject.toml`. A tag `setup-v<version>` builds a draft release; the
   website is published only when a release is published.

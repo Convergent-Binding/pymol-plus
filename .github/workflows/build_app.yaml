@@ -106,7 +106,6 @@ jobs:
         # pre-commit runs from the repository root, so the files are given explicitly
         run: |
           git ls-files -z . ../.github/workflows/build_app.yaml ../.github/workflows/docs.yaml \
-            ../.github/workflows/dependabot_automerge.yaml \
             | xargs -0 uvx pre-commit@4.7.0 run --config .pre-commit-config.yaml --show-diff-on-failure --files
 
       - name: Validate the Linux desktop entry and AppStream metadata

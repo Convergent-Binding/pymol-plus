@@ -34,7 +34,7 @@ Before declaring completion:
 - The repository root holds the PyMOL sources and the wheel build (`pymol-open-source-whl`).
 - `distribution/` holds the ready-to-run app packaging; for work there, `distribution/AGENTS.md`
   is the more specific guidance. Its workflows are in the root `.github/workflows/`
-  (`build_app.yaml`, `docs.yaml`, `dependabot_automerge.yaml`).
+  (`build_app.yaml`, `docs.yaml`).
 - Wheel releases use `v*` tags, app releases `setup-v*` tags.
 
 <!-- codev:start -->

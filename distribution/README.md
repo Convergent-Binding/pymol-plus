@@ -100,8 +100,8 @@ uvx pre-commit install            # before every commit from now on
 
 ### CI and pull requests
 - Changes reach `production` only through pull requests; the ruleset of `production` requires the green
-  `release` check, which fails if any other CI job failed. "Enable auto-merge" on a pull
-  request merges it (squash) as soon as CI is green, and merged branches are deleted.
+  `release` check, which fails if any other CI job failed. Every pull request, Dependabot's
+  included, is approved and merged by hand by kullik01 or urban233; nothing merges automatically.
 - A pull request that only changes text files (README, `AGENTS.md`, Dependabot and
   release-notes settings) or only files outside `distribution/` skips the app builds (about 1 instead of 8–10 minutes).
 - macOS Intel is the slowest job. GitHub supports its Intel runners (`macos-15-intel`) only
@@ -110,12 +110,10 @@ uvx pre-commit install            # before every commit from now on
 
 ### Dependency updates (Dependabot)
 Dependabot opens weekly, grouped pull requests for the Python packages, the GitHub Actions
-and the pre-commit hooks, with versions that are at least 14 days old. Minor and patch
-updates merge themselves once CI is green; major updates wait for a review. Such an automatic
-merge does not start a new CI run on `production` (GitHub's rule for its own token); the pull
-request's CI has tested it, and the next push or release tag builds everything again.
+and the pre-commit hooks, with versions that are at least 14 days old. Every update
+waits for a review and is merged by hand, like any other pull request.
 Deliberate limits:
-- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request without auto-merge,
+- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request,
   because the files in `edited/` must be ported to the new version first (the build stops
   until `EDITED_FOR_PYMOL_WHL_VERSION` in `automations/build_exe.py` matches).
 - **PySide6/shiboken6** stay at 6.9: 6.10 and newer need macOS 13 and glibc 2.34, which
