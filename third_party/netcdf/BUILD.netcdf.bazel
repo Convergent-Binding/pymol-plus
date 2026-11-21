@@ -37,6 +37,12 @@ cmake(
         # (found by running the build inside the real image, before CI did).
         "CMAKE_INSTALL_LIBDIR": "lib",
         "CMAKE_POSITION_INDEPENDENT_CODE": "ON",
+        # CHECK_FUNCTION_EXISTS(memmove) fails under MSVC with optimisation
+        # on (/O2 makes memmove an intrinsic), so netCDF compiled its own
+        # memmove (libdispatch/dmissing.c) and MSVC rejected it: "C2169:
+        # 'memmove': intrinsic function, cannot be defined". Every target
+        # platform has memmove; preset the result instead of probing.
+        "HAVE_MEMMOVE": "1",
         "NETCDF_BUILD_UTILITIES": "OFF",
         "NETCDF_ENABLE_BYTERANGE": "OFF",
         "NETCDF_ENABLE_DAP": "OFF",

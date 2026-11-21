@@ -2,6 +2,12 @@
 # open-protein-platform, where each of these lines answers a failure found on
 # a real CI run; see docs/features/bazel-build/.
 
+# Release builds, as CMake's Release build type was: optimised, with NDEBUG
+# defined so the asserts in layer*/ compile out. Bazel's default, fastbuild,
+# compiles without optimisation (/Od on Windows) and leaves assert() live.
+# //tools/bazel/tests:release_mode_test holds this.
+build --compilation_mode=opt
+
 # The wheels are tagged macosx_12_0, so the binaries must not need more.
 build --macos_minimum_os=12.0
 

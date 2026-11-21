@@ -1,4 +1,5 @@
 load("@pymol_project_metadata//:metadata.bzl", "VERSION")
+load("@rules_cc//cc:defs.bzl", "cc_test")
 load("@rules_python//python:defs.bzl", "py_test")
 
 # Holds //tools/bazel:pyproject.bzl's Starlark reading of pyproject.toml to
@@ -89,4 +90,12 @@ py_test(
     size = "small",
     srcs = ["build_backend_test.py"],
     deps = ["//tools/build_backend"],
+)
+
+# Builds use --compilation_mode=opt (.bazelrc), so the extensions are optimised
+# and assert() is compiled out, as in CMake's Release build.
+cc_test(
+    name = "release_mode_test",
+    size = "small",
+    srcs = ["release_mode_test.cc"],
 )
