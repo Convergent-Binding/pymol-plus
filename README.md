@@ -105,6 +105,17 @@ Run from the repository root:
 Machine-local Bazel options go into an ignored `user.bazelrc` at the repository root.
 
 ### Release wheels
+Pull requests are checked by the Bazel workflow (`bazel build //...` and `bazel test //...`
+on all four platforms, CPython 3.10). The full wheel matrix is built only before a release:
+
+1. Push a branch `release-stage/<version>` (for example `release-stage/3.2.0.4`) with the
+   release's changes and open its pull request into `production`. Every push to it runs
+   the Build Wheels workflow.
+2. When it is green and merged, tag the release `v<version>`; the tag builds, validates
+   and publishes the wheels.
+
+A manual run (Actions > Build Wheels > Run workflow) builds the matrix for any branch.
+
 The Build Wheels workflow builds twenty wheels: CPython 3.10 to 3.14 for Windows x64,
 macOS arm64, macOS x86_64 and Linux x86_64 (manylinux_2_28). Each wheel is repaired where
 its platform needs it (delvewheel bundles the MSVC C++ and OpenMP runtimes on Windows,
