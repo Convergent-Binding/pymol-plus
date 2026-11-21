@@ -41,3 +41,12 @@ py_test(
         "//tools/bazel:pymol_generated_headers",
     ],
 )
+
+# The _champ extension links and loads.
+py_test(
+    name = "champ_extension_test",
+    size = "small",
+    srcs = ["champ_extension_test.py"],
+    args = ["$(rootpath //contrib/champ:_champ.so)"],
+    data = ["//contrib/champ:_champ.so"],
+)

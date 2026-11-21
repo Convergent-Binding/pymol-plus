@@ -1,0 +1,43 @@
+# The `_champ` extension (chempy.champ._champ), CMakeLists.txt's ALL_CHAMP_SRC.
+# It needs nothing beyond Python.h; its headers are included unprefixed and
+# resolve from this directory.
+
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("//tools/bazel:pymol_native.bzl", "PYMOL_PY_LINK_DEPS")
+
+cc_binary(
+    name = "_champ.so",
+    srcs = [
+        "champ.c",
+        "champ.h",
+        "champ_module.c",
+        "chiral.c",
+        "chiral.h",
+        "const.h",
+        "err2.c",
+        "err2.h",
+        "feedback2.c",
+        "feedback2.h",
+        "list.c",
+        "list.h",
+        "mac.h",
+        "os_memory.c",
+        "os_memory.h",
+        "os_python.h",
+        "os_std.h",
+        "sort.c",
+        "sort.h",
+        "strblock.c",
+        "strblock.h",
+        "vla.c",
+        "vla.h",
+    ],
+    linkopts = select({
+        "@platforms//os:macos": ["-Wl,-undefined,dynamic_lookup"],
+        "//conditions:default": [],
+    }),
+    linkshared = True,
+    linkstatic = True,
+    visibility = ["//visibility:public"],
+    deps = ["@rules_python//python/cc:current_py_cc_headers"] + PYMOL_PY_LINK_DEPS,
+)
