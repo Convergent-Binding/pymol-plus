@@ -1,7 +1,7 @@
 """
 #A* -------------------------------------------------------------------
 #B* This file contains source code for the main class for PyMOL QT GUI
-#C* Copyright 2026 by Schrodinger, Martin Urban.
+#C* Copyright 2025 by Schrodinger, Martin Urban.
 #D* -------------------------------------------------------------------
 #E* It is unlawful to modify or remove this copyright notice.
 #F* -------------------------------------------------------------------
@@ -9,9 +9,8 @@
 #H* -------------------------------------------------------------------
 #I* Additional authors of this source file include:
 #-* unknown
-#-* Hannah Kullik
-#J* This file contains added source code by Martin Urban and Hannah Kullik
-#-* and is indicated
+#-*
+#J* This file contains added source code by Martin Urban and is indicated
 #-* by # BEGIN EDITED CODE SEGMENT
 #Z* -------------------------------------------------------------------
 """
@@ -100,8 +99,8 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
 
     def __init__(self):  # noqa
         QtWidgets.QMainWindow.__init__(self)
-        self.setDockOptions(QtWidgets.QMainWindow.DockOption.AllowTabbedDocks |
-                            QtWidgets.QMainWindow.DockOption.AllowNestedDocks)
+        self.setDockOptions(QtWidgets.QMainWindow.AllowTabbedDocks |
+                            QtWidgets.QMainWindow.AllowNestedDocks)
 
         # resize Window before it is shown
         options = pymol.invocation.options
@@ -124,13 +123,9 @@ class PyMOLQtGUI(QtWidgets.QMainWindow, pymol._gui.PyMOLDesktopGUI):
         self.setting_callbacks = defaultdict(list)
 
         # "session_file" setting in window title
-        # BEGIN EDITED CODE SEGMENT
-        # :author Hannah Kullik
-        # The app's name on all platforms: PyMOL-Open-Source
         self.setting_callbacks[440].append(
-            lambda v: self.setWindowTitle("PyMOL-Open-Source (" + os.path.basename(v) + ")")
+            lambda v: self.setWindowTitle("PyMOL (" + os.path.basename(v) + ")")
         )
-        # END EDITED CODE SEGMENT
 
         # "External" Command Line and Loggin Widget
         self._setup_history()
@@ -180,7 +175,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         quickbuttonslayout = QtWidgets.QVBoxLayout()
         quickbuttonslayout.setSpacing(2)
 
-        extguilayout = QtWidgets.QBoxLayout(QtWidgets.QBoxLayout.Direction.LeftToRight)
+        extguilayout = QtWidgets.QBoxLayout(QtWidgets.QBoxLayout.LeftToRight)
         extguilayout.setContentsMargins(2, 2, 2, 2)
         extguilayout.addLayout(layout)
         extguilayout.addLayout(quickbuttonslayout)
@@ -207,16 +202,16 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         else:
             dockWidget.hide()
 
-        self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, dockWidget)
+        self.addDockWidget(Qt.TopDockWidgetArea, dockWidget)
 
         # rearrange vertically if docking left or right
         @dockWidget.dockLocationChanged.connect
         def _(area):
-            if area == Qt.DockWidgetArea.LeftDockWidgetArea or area == Qt.DockWidgetArea.RightDockWidgetArea:
-                extguilayout.setDirection(QtWidgets.QBoxLayout.Direction.BottomToTop)
+            if area == Qt.LeftDockWidgetArea or area == Qt.RightDockWidgetArea:
+                extguilayout.setDirection(QtWidgets.QBoxLayout.BottomToTop)
                 quickbuttonslayout.takeAt(quickbuttons_stretch_index)
             else:
-                extguilayout.setDirection(QtWidgets.QBoxLayout.Direction.LeftToRight)
+                extguilayout.setDirection(QtWidgets.QBoxLayout.LeftToRight)
                 if quickbuttons_stretch_index >= quickbuttonslayout.count():
                     quickbuttonslayout.addStretch()
 
@@ -275,7 +270,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
             for name, callback in row:
                 btn = QtWidgets.QPushButton(name)
                 btn.setProperty("quickbutton", True)
-                btn.setAttribute(Qt.WidgetAttribute.WA_LayoutUsesWidgetRect) # OS X workaround
+                btn.setAttribute(Qt.WA_LayoutUsesWidgetRect) # OS X workaround
                 hbox.addWidget(btn)
 
                 if callback is None:
@@ -291,8 +286,8 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         hbox = QtWidgets.QHBoxLayout()
         self.progressbar = QtWidgets.QProgressBar()
         self.progressbar.setSizePolicy(
-                QtWidgets.QSizePolicy.Policy.Minimum,
-                QtWidgets.QSizePolicy.Policy.Minimum)
+                QtWidgets.QSizePolicy.Minimum,
+                QtWidgets.QSizePolicy.Minimum)
         hbox.addWidget(self.progressbar)
         self.abortbutton = QtWidgets.QPushButton('Abort')
         self.abortbutton.setStyleSheet("background: #FF0000; color: #FFFFFF")
@@ -453,16 +448,16 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
 
     def lineeditKeyPressEventFilter(self, watched, event):
         key = event.key()
-        if key == Qt.Key.Key_Tab:
+        if key == Qt.Key_Tab:
             self.complete()
-        elif key == Qt.Key.Key_Up:
-            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+        elif key == Qt.Key_Up:
+            if event.modifiers() & Qt.ControlModifier:
                 self.back_search()
             else:
                 self.back()
-        elif key == Qt.Key.Key_Down:
+        elif key == Qt.Key_Down:
             self.forward()
-        elif key == Qt.Key.Key_Return or key == Qt.Key.Key_Enter:
+        elif key == Qt.Key_Return or key == Qt.Key_Enter:
             # filter out "Return" instead of binding lineedit.returnPressed,
             # because otherwise OrthoKey would capture it as well.
             self.doPrompt()
@@ -475,14 +470,14 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         Filter out <Tab> event to do tab-completion instead of move focus
         '''
         type_ = event.type()
-        if type_ == QtCore.QEvent.Type.KeyRelease:
-            if event.key() == Qt.Key.Key_Tab:
+        if type_ == QtCore.QEvent.KeyRelease:
+            if event.key() == Qt.Key_Tab:
                 # silently skip tab release
                 return True
-        elif type_ == QtCore.QEvent.Type.KeyPress:
+        elif type_ == QtCore.QEvent.KeyPress:
             if watched is self.lineedit:
                 return self.lineeditKeyPressEventFilter(watched, event)
-            elif event.key() == Qt.Key.Key_Tab:
+            elif event.key() == Qt.Key_Tab:
                 self.keyPressEvent(event)
                 return True
         return False
@@ -506,7 +501,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         '''
         Full screen
         '''
-        is_fullscreen = self.windowState() == Qt.WindowState.WindowFullScreen
+        is_fullscreen = self.windowState() == Qt.WindowFullScreen
 
         if toggle == -1:
             toggle = not is_fullscreen
@@ -625,10 +620,10 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                         (name, R, G, B))
 
             # if new color, insert and make current row
-            if not form.list_colors.findItems(name, Qt.MatchFlag.MatchExactly):
+            if not form.list_colors.findItems(name, Qt.MatchExactly):
                 form.list_colors.addItem(name)
                 form.list_colors.setCurrentItem(
-                    form.list_colors.findItems(name, Qt.MatchFlag.MatchExactly)[0])
+                    form.list_colors.findItems(name, Qt.MatchExactly)[0])
 
         # hook up events
         form.slider_R.valueChanged.connect(lambda v: update_spinbox(form.input_R, v))
@@ -650,7 +645,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         app = plugins.get_pmgapp()
         if not self.builder:
             self.builder = BuilderPanelDocked(self, app)
-            self.addDockWidget(Qt.DockWidgetArea.TopDockWidgetArea, self.builder)
+            self.addDockWidget(Qt.TopDockWidgetArea, self.builder)
 
         self.builder.show()
         self.builder.raise_()
@@ -1042,9 +1037,9 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
             self.showMaximized()
         elif action == 6: # fit
             if hasattr(QtGui, 'QWindow') and self.windowHandle().visibility() in (
-                    QtGui.QWindow.Visibility.Maximized, QtGui.QWindow.Visibility.FullScreen):
+                    QtGui.QWindow.Maximized, QtGui.QWindow.FullScreen):
                 return
-            a = self.screen().availableGeometry()
+            a = QtWidgets.QApplication.desktop().availableGeometry(self)
             g = self.geometry()
             f = self.frameGeometry()
             w = min(f.width(), a.width())
@@ -1058,7 +1053,7 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                 h - f.height() + g.height(),
             )
         elif action == 7: # focus
-            self.setFocus(Qt.FocusReason.OtherFocusReason)
+            self.setFocus(Qt.OtherFocusReason)
         elif action == 8: # defocus
             self.clearFocus()
 
@@ -1166,12 +1161,12 @@ class PyMOLApplication(QtWidgets.QApplication):
     # handled by Qt, we don't want that.
 
     def handle_file_open(self, ev):
-        if ev.type() == QtCore.QEvent.Type.ApplicationActivate:
+        if ev.type() == QtCore.QEvent.ApplicationActivate:
             self.handle_file_open = self.handle_file_open_active
         return False
 
     def handle_file_open_active(self, ev):
-        if ev.type() != QtCore.QEvent.Type.FileOpen:
+        if ev.type() != QtCore.QEvent.FileOpen:
             return False
 
         # When double clicking a file in Finder, open it in a new instance
@@ -1239,13 +1234,13 @@ def execapp():
 
     # use QT_OPENGL=desktop (auto-detection may fail on Windows)
     if hasattr(Qt, 'AA_UseDesktopOpenGL') and pymol.IS_WINDOWS:
-        QtCore.QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_UseDesktopOpenGL)
+        QtCore.QCoreApplication.setAttribute(Qt.AA_UseDesktopOpenGL)
 
     # enable 4K scaling on Windows and Linux
     if hasattr(Qt, 'AA_EnableHighDpiScaling') and not any(
             v in os.environ
             for v in ['QT_SCALE_FACTOR', 'QT_SCREEN_SCALE_FACTORS']):
-        QtCore.QCoreApplication.setAttribute(Qt.ApplicationAttribute.AA_EnableHighDpiScaling)
+        QtCore.QCoreApplication.setAttribute(Qt.AA_EnableHighDpiScaling)
 
     # fix Windows taskbar icon
     if pymol.IS_WINDOWS:
@@ -1256,74 +1251,12 @@ def execapp():
     app = PyMOLApplication(['PyMOL'])
     app.setWindowIcon(make_pymol_qicon())
 
-    # BEGIN EDITED CODE SEGMENT
-    # :author Hannah Kullik
-    # Link the window to the installed pymol-open-source.desktop entry.
-    # On native Wayland the compositor matches the window to the desktop
-    # entry by this app id (taskbar icon and grouping). On X11 the icon comes
-    # from setWindowIcon and StartupWMClass in the entry.
-    if pymol.IS_LINUX and hasattr(app, 'setDesktopFileName'):
-        app.setDesktopFileName('pymol-open-source')
-    # END EDITED CODE SEGMENT
-
     window = PyMOLQtGUI()
-    # BEGIN EDITED CODE SEGMENT
-    # :author Hannah Kullik
-    # The app's name on all platforms: PyMOL-Open-Source
-    window.setWindowTitle("PyMOL-Open-Source")
-    # END EDITED CODE SEGMENT
+    window.setWindowTitle("PyMOL")
 
     @commandoverloaddecorator
     def viewport(w=-1, h=-1, _self=None):
         window.viewportsignal.emit(int(w), int(h))
-
-    # BEGIN EDITED CODE SEGMENT
-    # :author Hannah Kullik
-    # Show the splash screen at the same size at every display scaling
-    # (100 %, 125 %, 150 %, 200 % ...). PyMOL sizes the view and draws the
-    # image with the whole-number display_scale_factor, so at fractional
-    # scalings (e.g. 150 %) the splash came out a third smaller. Scale the
-    # image by the remaining fraction and size the view by the real scale.
-    # Like PyMOL, size the view first and load the image second: a size
-    # change after loading discards the image (black view).
-    import pymol.commanding
-    load_splash_image = pymol.commanding._load_splash_image
-
-    def load_splash_image_at_real_scale(filename, url, _self=pymol.cmd):
-        if url or not os.path.exists(filename) or _self.get_names():
-            return load_splash_image(filename, url, _self)
-        import tempfile
-        import time
-        # Wait (at most 5 s) until the window is shown: on Wayland the
-        # compositor sets the window's size when it shows it, which would
-        # override an earlier size. This runs in PyMOL's splash thread.
-        for _ in range(100):
-            handle = window.windowHandle()
-            if handle is not None and handle.isExposed():
-                break
-            time.sleep(0.05)
-        image = QtGui.QImage(filename)
-        width, height = image.width(), image.height()
-        scale = window.pymolwidget.devicePixelRatioF()
-        fraction = scale / max(1, int(scale))
-        scaled_filename = ''
-        if abs(fraction - 1) > 0.01:
-            image = image.scaled(
-                round(width * fraction), round(height * fraction),
-                Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation)
-            handle, scaled_filename = tempfile.mkstemp('.png')
-            os.close(handle)
-            image.save(scaled_filename)
-        # hide the text splash, as PyMOL does
-        print()
-        _self.viewport(round(width * scale), round(height * scale))
-        _self.load_png(scaled_filename or filename, 0, quiet=1)
-        if scaled_filename:
-            os.unlink(scaled_filename)
-
-    pymol.commanding._load_splash_image = load_splash_image_at_real_scale
-    # END EDITED CODE SEGMENT
 
     @commandoverloaddecorator
     def full_screen(toggle=-1, _self=None):
@@ -1359,54 +1292,4 @@ def execapp():
     if options.plugins:
         window.initializePlugins()
 
-    # BEGIN EDITED CODE SEGMENT
-    # :author Hannah Kullik
-    # macOS: versions up to 3.1.0.4+4 were installed as PyMOL-Open-Source-<version>.app,
-    # so this app (PyMOL-Open-Source.app) did not replace them in Applications. Offer once
-    # to move such older apps to the Trash; macOS may ask for permission to modify apps.
-    if sys.platform == 'darwin':
-        QtCore.QTimer.singleShot(1000, lambda: offer_to_remove_older_apps(window))
-    # END EDITED CODE SEGMENT
-
     app.exec()
-
-
-# BEGIN EDITED CODE SEGMENT
-# :author Hannah Kullik
-def offer_to_remove_older_apps(window):
-    '''
-    Offers once to move older PyMOL-Open-Source-<version>.app bundles to the Trash
-    (macOS), so only the current app remains in Applications.
-    '''
-    import glob
-    settings = QtCore.QSettings('PyMOL-Open-Source', 'PyMOL-Open-Source')
-    if settings.value('older_apps_offered', False, type=bool):
-        return
-    current_app = os.path.realpath(os.path.join(os.path.dirname(sys.executable), '..', '..'))
-    older_apps = [
-        path for path in sorted(
-            glob.glob('/Applications/PyMOL-Open-Source-*.app') +
-            glob.glob(os.path.expanduser('~/Applications/PyMOL-Open-Source-*.app')))
-        if os.path.realpath(path) != current_app
-    ]
-    if not older_apps:
-        return
-    settings.setValue('older_apps_offered', True)
-    names = '\n'.join(os.path.basename(path) for path in older_apps)
-    answer = QtWidgets.QMessageBox.question(
-        window, 'Older version found',
-        'Older versions of PyMOL-Open-Source are still in Applications:\n\n'
-        + names + '\n\nMove them to the Trash?')
-    if answer != QtWidgets.QMessageBox.StandardButton.Yes:
-        return
-    not_moved = []
-    for path in older_apps:
-        result = QtCore.QFile.moveToTrash(path)
-        # PySide6 returns (success, path in the Trash), PyQt a bool
-        if not (result[0] if isinstance(result, tuple) else result):
-            not_moved.append(os.path.basename(path))
-    if not_moved:
-        QtWidgets.QMessageBox.information(
-            window, 'Older version found',
-            'Please move these apps to the Trash in Finder:\n\n' + '\n'.join(not_moved))
-# END EDITED CODE SEGMENT

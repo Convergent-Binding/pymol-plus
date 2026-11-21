@@ -1,6 +1,6 @@
 # Unofficial PyMOL(TM) Setup
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-blue.svg)](https://GitHub.com/kullik01/pymol-open-source-setup/graphs/commit-activity)
-[![Python Version](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
+[![Python Version](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
 [![License](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](https://opensource.org/licenses/BSD-3-Clause)
 [![GitHub issues](https://img.shields.io/github/issues/kullik01/pymol-open-source-setup)](https://GitHub.com/kullik01/pymol-open-source-setup/issues/)
 
@@ -18,10 +18,10 @@ for **all major** operating systems.
 ## Contents of this document
 * [About PyMOL](#About-PyMOL)
 * [Contents of this repository](#Contents-of-this-repository)
+    * [Scripts](#Scripts)
 * [From source](#From-source)
     * [Prerequisites](#Prerequisites)
     * [Step-by-step guide](#Step-by-step-guide)
-* [Releasing a new version](#Releasing-a-new-version)
 * [License](#License)
 * [Acknowledgements](#Acknowledgements)
 <!--* [References and useful links](#References-and-useful-links) -->
@@ -32,134 +32,92 @@ for **all major** operating systems.
 Please note that the files provided here are **unofficial**. They are informal, unrecognized, and unsupported, offered for testing and evaluation purposes only. No warranty or liability is provided, and the software is made available "as-is."
 
 ## Contents of this repository
-| Folder | Content |
-|--------|---------|
-| `automations/` | Build commands (`./automator.sh build app`, `.\win_automator.bat build packages`) |
-| `os_specific/` | cx_Freeze configuration and packaging per platform (Inno Setup, DMG, .deb/.rpm/.tar.gz) |
-| `edited/` | PyMOL files changed for this setup (marked `BEGIN EDITED CODE SEGMENT`) and the start script |
-| `licenses/` | License texts shipped with every package |
-| `tests/` | Smoke tests of the frozen app and checks of the packages |
-| `docs/website/` | The [website](https://kullik01.github.io/pymol-open-source-setup/) (MkDocs) |
-
-The version of the packages (e.g. 3.2.0.3+1) is the version of the PyMOL wheel plus a build number of
-this setup. The application itself shows the version of the PyMOL core it is built from (currently
-3.2.0a, a development version).
-
-The GUI uses Qt 6 (PySide6 6.9) and runs natively on Wayland; `QT_QPA_PLATFORM=xcb` selects XWayland.
+"Insert some more information here"
 
 ## From source
 The following information is about building a platform dependent package/setup from source.
-The GitHub action [build_app.yaml](.github/workflows/build_app.yaml) runs exactly these steps
-for all three platforms.
 
-### Prerequisites
-- [uv](https://docs.astral.sh/uv/getting-started/installation/); it also installs the Python of `.python-version` if needed
-- Windows: [Inno Setup 7](https://jrsoftware.org/isinfo.php) (default install location or `ISCC.exe` on the `PATH`)
-- Linux (**only** for building the .deb/.rpm packages): [fpm](https://fpm.readthedocs.io/) and `rpmbuild`
-  - Debian/Ubuntu: `sudo apt-get install ruby rpm && sudo gem install fpm`
-  - Fedora: `sudo dnf install ruby rpm-build && sudo gem install fpm`
-- macOS (**only** for building the DMG): [create-dmg](https://github.com/create-dmg/create-dmg) (`brew install create-dmg`)
+### Prerequisites for Windows
+- A clean checkout on a native Windows x64 build environment
+- Python 3.11 and uv 0.12.3
+- Inno Setup compiler 6
+  - Install location must be: `C:\Program Files (x86)\Inno Setup 6\ISCC.exe`
+
+### Prerequisites for Linux
+- Ruby (**only** if fpm is used for packaging)
+  - apt (Debian or Ubuntu): `sudo apt-get install ruby-full`
+  - yum (CentOS, Fedora, or RHEL): `sudo yum install ruby`
 
 ### Step-by-step guide
-On Windows, use `.\win_automator.bat` instead of `./automator.sh`.
-1. Create the virtual environment `.venv` with all dependencies (`requirements.txt`, one file
-   for all platforms). Run it again after the requirements changed:
-   ```shell
-   ./automator.sh setup
-   ```
-2. Build the frozen application into the `dist` directory:
-   ```shell
-   ./automator.sh build app
-   ```
-   | Platform      | Output                                         |
-   |---------------|------------------------------------------------|
-   | Windows/Linux | `dist/exe.<platform>-<Python version>/`        |
-   | macOS         | `dist/PyMOL-Open-Source.app`                   |
-3. Check the build with the smoke test (`test gui` also starts the Qt GUI):
-   ```shell
-   ./automator.sh test
-   ```
-4. Create the installer/packages of your platform in `os_specific/dist` (Windows: Inno Setup
-   installer; Linux: .tar.gz, .deb and .rpm; macOS: DMG):
-   ```shell
-   ./automator.sh build packages
-   ```
-   The DMG name tells the architecture of the built app (`_macOS_AppleSilicon.dmg` or
-   `_macOS_Intel.dmg`); on a Mac it is the architecture of the Python used for the build.
+Use the platform-specific instructions below. The supported Windows standalone
+flow does not require a virtual environment or the legacy platform
+`requirements.txt`/cx_Freeze dependencies.
 
-`./automator.sh build all` runs steps 2 and 4 in one go.
-
-### Quick checks
-The CI job "checks" lints the Python code (ruff), the shell scripts (shellcheck) and the
-GitHub workflows (actionlint) in about half a minute. Run the same checks locally with
-[uv](https://docs.astral.sh/uv/):
+#### Windows
+The supported Windows packaging path is the standalone x64 bundle. From a
+Python 3.11 environment with uv 0.12.3 available, run:
 ```shell
-uvx pre-commit run --all-files    # once
-uvx pre-commit install            # before every commit from now on
+python pymakefile.py build_windows_bundle
+python pymakefile.py package_windows_bundle
+python pymakefile.py prepare_inno_setup
 ```
 
-### CI and pull requests
-- Changes reach `main` only through pull requests; the ruleset of `main` requires the green
-  `release` check, which fails if any other CI job failed. "Enable auto-merge" on a pull
-  request merges it (squash) as soon as CI is green, and merged branches are deleted.
-- A pull request that only changes text files (README, `AGENTS.md`, Dependabot and
-  release-notes settings) skips the app builds (about 1 instead of 8–10 minutes).
-- macOS Intel is the slowest job. GitHub supports its Intel runners (`macos-15-intel`) only
-  until about August–autumn 2027; then the Intel DMG needs a decision (for example built on
-  Apple Silicon, or dropped).
+The second command creates the deterministic portable ZIP. The third command
+creates the x64 Inno staging tree. Compile the x64 installer without executing
+it:
+```shell
+& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion="<version>" os_specific/windows/inno_setup/setup_x64.iss
+```
 
-### Dependency updates (Dependabot)
-Dependabot opens weekly, grouped pull requests for the Python packages, the GitHub Actions
-and the pre-commit hooks, with versions that are at least 14 days old. Minor and patch
-updates merge themselves once CI is green; major updates wait for a review. Such an automatic
-merge does not start a new CI run on `main` (GitHub's rule for its own token); the pull
-request's CI has tested it, and the next push or release tag builds everything again.
-Deliberate limits:
-- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request without auto-merge,
-  because the files in `edited/` must be ported to the new version first (the build stops
-  until `EDITED_FOR_PYMOL_WHL_VERSION` in `automations/build_exe.py` matches).
-- **PySide6/shiboken6** stay at 6.9: 6.10 and newer need macOS 13 and glibc 2.34, which
-  would drop macOS 12 and RHEL/AlmaLinux 8.
-- **biopython** stays at 1.86: newer versions have no Python 3.13 wheels for Intel Macs.
+Windows x86 CI and packaging are retired and unsupported. Do not use the old
+cx_Freeze `build_app` or x86 Inno packaging path for supported Windows output.
+Installer execution, installation, and shortcut validation are not part of this
+build flow.
 
-## Releasing a new version
-The version in [pyproject.toml](pyproject.toml) is the only place to change. The build,
-the file names and the website (version, file names and download links) all use it.
+#### macOS
+If you are on macOS:
+```shell
+chmod +x ./pymake.sh && ./pymake.sh build_app
+```
+To build the DMG use a tool like [create-dmg](https://github.com/create-dmg/create-dmg) or fork the repository 
+and run the GitHub action build_app.yaml.
 
-1. Change the version in `pyproject.toml` in a pull request and merge it.
-2. Tag the merged commit on `main` with the version and push the tag:
-   ```shell
-   git tag v<version> && git push origin v<version>
-   ```
-3. The GitHub action builds and tests everything and creates a **draft** release with
-   all files. It fails if the tag does not match the version or if the website download
-   links do not match the built files.
-4. Check the draft on the [releases page](https://github.com/kullik01/pymol-open-source-setup/releases)
-   and publish it. Publishing the release also publishes the website.
+#### Linux
+If you are on Linux:
+```shell
+chmod +x ./pymake.sh && ./pymake.sh build_app
+```
+To build the tar.gz run:
+```shell
+mkdir -p packaged/build/PyMOL-Open-Source-<version-number>
+cp -r ./dist/exe.linux*/* packaged/build/PyMOL-Open-Source-<version-number>/
+mkdir -p packaged/bin
+tar czvf packaged/bin/PyMOL-Open-Source_v<version-number>.tar.gz packaged/build/PyMOL-Open-Source-<version-number>
+```
+If you want to build a .deb or .rpm package, you could use the Ruby gem called fpm:
+```shell
+sudo gem install fpm
+mkdir -p package-root/opt/PyMOL-Open-Source-<version-number>
+cp -r ./dist/exe.linux*/* package-root/opt/PyMOL-Open-Source-<version-number>/
+mkdir -p package-root/usr/bin
+ln -s /opt/PyMOL-Open-Source-<version-number>/Open-Source-PyMOL package-root/usr/bin/Open-Source-PyMOL
+mkdir -p package-root/usr/share/applications
+cp os_specific/linux/open-source-pymol.desktop package-root/usr/share/applications
+sed -i "s|/opt/open-source-pymol|/opt/PyMOL-Open-Source-<version-number>|g" package-root/usr/share/applications/open-source-pymol.desktop
 
-Before publishing, test once by hand what CI cannot (with the files of the draft release):
-- [ ] **Windows:** install, start PyMOL from the Start menu, double-click a `.pse` file,
-  uninstall (shortcuts and file types are gone).
-- [ ] **macOS:** open the DMG, drag the app to Applications, allow it once in the Privacy &
-  Security settings, start it, double-click a `.pse` file in Finder while PyMOL is closed.
-- [ ] **Linux:** install the `.deb` or `.rpm`, start PyMOL from the application menu,
-  double-click a `.pse` file in the file manager.
-- [ ] **Everywhere:** `fetch 1ubq` loads a structure (internet access).
-
-Tested releases:
-- v3.2.0.3+1 (20 Nov 2026): all checks passed on Windows, macOS and Linux.
-
-The website is only published for published releases. To publish website changes
-without a release, run the "Build Docs" action manually (Actions > Build Docs > Run workflow)
-on the tag of the latest release or on `main` (only if its version is already released).
+fpm -s dir -t deb \
+-n PyMOL-Open-Source \
+-v <version-number> \
+-a amd64 \
+-C package-root \
+--description "PyMOL installation for debian-based distros" \
+--license "BSD-3-Clause" \
+```
 
 ## License
-- **Open-Source PyMOL:** Copyright (c) [Schrodinger, LLC](https://www.schrodinger.com/), published under
-  a BSD-like license, see [LICENSE_Schrodinger](LICENSE_Schrodinger).
-- **This repository** (build scripts, edited PyMOL files, tests): BSD-3-Clause, see [LICENSE](LICENSE).
-- **Third-party components:** the packages also contain Python, Qt/PySide6, OpenSSL and other open-source
-  components. Every package ships their license texts in its `licenses` folder; see
-  [licenses/THIRD-PARTY-NOTICES.txt](licenses/THIRD-PARTY-NOTICES.txt).
+Copyright (c) [Schrodinger, LLC](https://www.schrodinger.com/)
+
+Published under a BSD-like license, see [LICENSE](LICENSE).
 
 ## Acknowledgements
 **Schrödinger** for being the driving force behind the continued development of PyMOL after Warren's passing, ensuring that the open-source version remained alive and well.

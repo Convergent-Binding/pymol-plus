@@ -172,9 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+/inno-build-release/
 /pre-built/
 
 docs/website/static/
-# Written by the opp-workflow plugin: what it writes into the checkout.
-/graphify-out/
-/.opp/local/

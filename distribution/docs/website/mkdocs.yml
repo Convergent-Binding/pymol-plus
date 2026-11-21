@@ -1,5 +1,5 @@
-site_name: PyMOL-Open-Source
-site_url: https://kullik01.github.io/pymol-open-source-setup/
+site_name: Open-Source PyMOL
+site_url: https://mydomain.org/mysite
 nav:
     - Home: index.md
     - Install:
@@ -32,12 +32,15 @@ extra_css:
 
 plugins:
     - offline
-    # Version, file names and download links from pyproject.toml, see main.py
-    - macros:
-        on_error_fail: true
 
 markdown_extensions:
     - attr_list
+    - pymdownx.emoji:
+        emoji_index: !!python/name:material.extensions.emoji.twemoji
+        emoji_generator: !!python/name:material.extensions.emoji.to_svg
+        options:
+          custom_icons:
+            - overrides/.icons
     - md_in_html
     - admonition
     - pymdownx.details
@@ -45,4 +48,4 @@ markdown_extensions:
 
 
 copyright:
-    Copyright © 2026 Open-Source PyMOL - Schrodinger, LLC (Website & Setup - Martin Urban & Hannah Kullik)
+    Copyright © 2025 Open-Source PyMOL - Schrodinger, LLC (Website & Setup - Martin Urban & Hannah Kullik)

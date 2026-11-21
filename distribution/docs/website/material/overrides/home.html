@@ -5,51 +5,31 @@
 {{ super() }}
 
 <!-- Hero for landing page -->
-<style>
-  #install-button:disabled,
-  #install-button:disabled:hover {
-    background-color: #000000;
-    border: solid #000 2px;
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-</style>
 <script>
-  // Shows the installation guide of the visitor's operating system.
-  // Supported: Windows, macOS and Linux (x86_64); phones and tablets are not.
   document.addEventListener('DOMContentLoaded', function() {
     var button = document.getElementById('install-button');
-    var platform = navigator.platform.toLowerCase();
-    var userAgent = navigator.userAgent.toLowerCase();
-    // iPadOS reports "MacIntel" like a Mac, but has a touch screen
-    var isMobile = /android|iphone|ipad|ipod/.test(userAgent)
-      || (platform === 'macintel' && navigator.maxTouchPoints > 1);
-    var guide = null;
-    var label = '';
+    var os = navigator.platform.toLowerCase();
 
-    if (isMobile) {
-      guide = null;
-    } else if (platform.indexOf('win') !== -1) {
-      guide = './install_windows.html';
-      label = 'Install for Windows';
-    } else if (platform.indexOf('mac') !== -1) {
-      guide = './install_macos.html';
-      label = 'Install for macOS';
-    } else if (platform.indexOf('linux') !== -1 && !/arm|aarch64/.test(platform)) {
-      guide = './install_linux.html';
-      label = 'Install for Linux';
-    }
-
-    if (guide) {
+    if (os.indexOf('win') !== -1) {
       button.onclick = function() {
-        location.href = guide;
+        location.href = './install_windows.html';
       };
-      button.innerText = label;
+      button.innerText = 'Install for Windows';
+    } else if (os.indexOf('mac') !== -1) {
+      button.onclick = function() {
+        location.href = './install_mac.html';
+      };
+      button.innerText = 'Install for macOS';
+    } else if (os.indexOf('linux') !== -1) {
+      button.onclick = function() {
+        location.href = './install_linux.html';
+      };
+      button.innerText = 'Install for Linux';
     } else {
-      // Unsupported device; the "Other Platforms" button still shows the overview
-      button.disabled = true;
-      button.innerText = 'Not available for this device';
-      button.title = 'PyMOL-Open-Source is available for Windows, macOS and Linux';
+      button.onclick = function() {
+        alert('Unsupported OS');
+      };
+      button.innerText = 'Install';
     }
   });
 </script>
@@ -59,7 +39,7 @@
   <div class="md-grid conteiner-row pt-1 pt-lg-5 my-4">
     <div class="px-3 ctx-header-text conteiner">
       <div class="conteiner-row">
-        <p class="h1 text-xs-center white-font-bold">PyMOL-Open-Source</p>
+        <p class="h1 text-xs-center white-font-bold">Open-Source PyMOL</p>
       </div>
       <img src="assets/images/logo.png" class="laverage-header-img d-lg-none d-xl-none mx-auto mb-5" />
       <p class="h3 text-xs-center white-font-color">
@@ -98,6 +78,57 @@
 </section>
 
 <section class="second-gradiant-body w-100">
+  <!--We ship it. You own it-->
+<!--  <div class="md-grid conteiner-row pt-4 my-4">-->
+<!--    <div class="card-white py-3 mx-xs-3 mx-sm-3 mx-4 mx-xl-0 ">-->
+<!--      <div class="conteiner-row">-->
+<!--        <div class="conteiner ctx-card-white-1 pt-4">-->
+<!--          <div class="d-sm text-align-center">-->
+<!--            <p class="display-3 Telegraf-UltraBold text-dark mx-auto mt-4">We ship it.</p>-->
+<!--            <p class="display-3 Telegraf-UltraBold text-pink mx-auto my-4">You own it.</p>-->
+<!--          </div>-->
+<!--          <div class="d-sm-none d-md-none d-lg-none d-xl-none text-align-center">-->
+<!--            <p class="display-4 Telegraf-UltraBold text-dark mx-auto mt-4">We ship it.</p>-->
+<!--            <p class="display-4 Telegraf-UltraBold text-pink mx-auto my-4">You own it.</p>-->
+<!--          </div>-->
+
+<!--          <div class="conteiner ctx-card-white-1 text-dark h3 d-lg-none d-xl-none my-xs-5 my-sm-5 my-md-5">-->
+<!--            <ul class="ul-home mx-xs-auto mx-sm-auto mx-md-auto my-xs-5 my-sm-5 my-md-5">-->
+<!--              <li>- Own your AWS infrastructure</li>-->
+<!--              <li>- Implement, reuse and scale faster</li>-->
+<!--              <li>- Bootstrap your AWS Landing Zone</li>-->
+<!--              <li>- Proven libraries and modules</li>-->
+<!--              <li>- Modern Terraform, Ansible, Helm, K8s Stack</li>-->
+<!--              <li>- Optimize your cloud costs by design</li>-->
+<!--              <li>- Secure your cloud assets and production workloads</li>-->
+<!--              <li>- Achieve compliance in AWS</li>-->
+<!--            </ul>-->
+<!--          </div>-->
+
+<!--          <button-->
+<!--            onclick="window.open('https://github.com/binbashar', '_blank')"-->
+<!--            title="{{ lang.t('source.link.title') }}"-->
+<!--            type="button"-->
+<!--            class="btn-white btn-xl-large btn-lg-large box-shadow mx-auto my-4"-->
+<!--          >-->
+<!--            Contribute on GitHub-->
+<!--          </button>-->
+<!--        </div>-->
+<!--        <div class="conteiner ctx-card-white-1 text-dark h3 d-lg">-->
+<!--          <ul>-->
+<!--            <li>- Own your AWS infrastructure</li>-->
+<!--            <li>- Implement, reuse and scale faster</li>-->
+<!--            <li>- Bootstrap your AWS Landing Zone</li>-->
+<!--            <li>- Proven libraries and modules</li>-->
+<!--            <li>- Modern Terraform, Ansible, Helm, K8s Stack</li>-->
+<!--            <li>- Optimize your cloud costs by design</li>-->
+<!--            <li>- Secure your cloud assets and production workloads</li>-->
+<!--            <li>- Achieve compliance in AWS</li>-->
+<!--          </ul>-->
+<!--        </div>-->
+<!--      </div>-->
+<!--    </div>-->
+<!--  </div>-->
 
   <!--Whats is Open-Source PyMOL-->
   <div class="conteiner-row-lg conteiner-row-xl conteiner py-5 my-5">
@@ -124,6 +155,9 @@
         </div>
       </div>
     </div>
+<!--    <div class="conteiner" style="order:1; flex: 50%; overflow:hidden;">-->
+<!--      <img src="assets/images/main_window.png" class="laverage-mac-img my-xs-5 my-sm-5 my-md-5" />-->
+<!--    </div>-->
   </div>
 </section>
 
@@ -209,6 +243,8 @@
 <!--Our tech stack-->
 <section class="white-body w-100">
   <div class="md-grid conteiner pt-5  my-0 my-xl-4 my-lg-4">
+<!--    <p class="display-3 text-dark Telegraf-UltraBold mt-4 text-align-center text-start-xl text-start-lg">Software Architecture</p>-->
+<!--    <img src="assets/images/architecture.png" class="mx-auto my-5" width="80%"/>-->
     <div class="conteiner conteiner-row-lg conteiner-row-xl my-4">
       <div class="text-dark h3 mx-4 my-3 mx-lg-0 my-xl-0 mx-lg-0 my-xl-0" style="order:0; flex: 50%;">
         <p>Explore the capabilities of PyMOL through concise, actionable tutorials. We recommend the instructional YouTube series
@@ -229,6 +265,12 @@
         </button>
       </div>
     </div>
+    <!--    <img src="/assets/images/diagrams/AWS-ORGANIZATION.png" class="mx-auto mt-5 mb-3 d-sm" width="100%"/>-->
+<!--    <img src="assets/images/diagrams/ref-architecture-aws.png" class="mx-auto mt-5 mb-3 d-sm" width="100%"/>-->
+<!--    <img src="assets/images/diagrams/diagrama-organization-binbash.png" class="mx-auto mt-5 d-sm-none d-md-none d-lg-none d-xl-none" width="100%"/>-->
+<!--    <div class="conteiner-row my-0 my-xl-4 my-lg-4 stack-tenology-gradient">-->
+<!--      <img src="assets/images/logos/stack-tecnologico-2.svg" class="mx-auto py-3" width="60%"/>-->
+<!--    </div>-->
   </div>
 </section>
 
@@ -237,11 +279,12 @@
   <div class="md-grid conteiner-row-xl conteiner-row-lg conteiner my-4">
     <div class="conteiner-row" style="flex:50%">
       <div class="text-white md-copyright">
-        Copyright © 2026 Open-Source PyMOL - Schrodinger, LLC (Website & Setup - Martin Urban & Hannah Kullik)<br>
+        Copyright © 2025 Open-Source PyMOL - Schrodinger, LLC (Website & Setup - Martin Urban & Hannah Kullik)<br>
         Made with Material for MkDocs
       </div>
     </div>
   </div>
 </footer>
+<!--</footer>-->
 
 {% endblock %}
