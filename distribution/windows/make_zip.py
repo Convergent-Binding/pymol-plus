@@ -30,12 +30,12 @@ def write_zip(folder: pathlib.Path, out: pathlib.Path) -> int:
   )
   with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as tmp_zip:
     for tmp_path in tmp_files:
-      tmp_info = zipfile.ZipInfo(
+      tmp_member = zipfile.ZipInfo(
         tmp_path.relative_to(folder).as_posix(), _TIMESTAMP
       )
-      tmp_info.compress_type = zipfile.ZIP_DEFLATED
-      tmp_info.external_attr = 0o644 << 16
-      tmp_zip.writestr(tmp_info, tmp_path.read_bytes())
+      tmp_member.compress_type = zipfile.ZIP_DEFLATED
+      tmp_member.external_attr = 0o644 << 16
+      tmp_zip.writestr(tmp_member, tmp_path.read_bytes())
   return len(tmp_files)
 
 
@@ -52,7 +52,8 @@ def main(argv: list[str]) -> int:
   tmp_parser.add_argument("--folder", required=True)
   tmp_parser.add_argument("--out", required=True)
   tmp_arguments = tmp_parser.parse_args(argv)
-  if write_zip(pathlib.Path(tmp_arguments.folder), pathlib.Path(tmp_arguments.out)):
+  tmp_folder = pathlib.Path(tmp_arguments.folder)
+  if write_zip(tmp_folder, pathlib.Path(tmp_arguments.out)):
     return 0
   print(f"make_zip: {tmp_arguments.folder} holds no file", file=sys.stderr)
   return 1

@@ -9,6 +9,7 @@ Note: the certificate check fails if only SSL_CERT_DIR is set (lazily loaded).
 
 Prints "SMOKE TEST OK" on success, otherwise exits with status 1.
 """
+import ctypes
 import faulthandler
 import os
 import pathlib
@@ -84,7 +85,7 @@ def check_licenses() -> None:
 
 
 APP_USER_MODEL_ID = "io.github.kullik01.pymol-open-source"
-"""The app's identity on the Windows taskbar, also its shortcuts' (setup.iss)."""
+"""The app's identity on the Windows taskbar, also its shortcuts'."""
 
 
 def check_app_user_model_id() -> None:
@@ -95,8 +96,6 @@ def check_app_user_model_id() -> None:
   """
   if sys.platform != "win32":
     return
-  import ctypes  # noqa: PLC0415  (Windows only)
-
   tmp_id = ctypes.c_wchar_p()
   tmp_result = ctypes.windll.shell32.GetCurrentProcessExplicitAppUserModelID(
     ctypes.byref(tmp_id)

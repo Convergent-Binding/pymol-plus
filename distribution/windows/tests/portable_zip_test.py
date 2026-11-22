@@ -46,9 +46,13 @@ class PortableZipTest(unittest.TestCase):
     """No .pyc, and no member path that is absolute or climbs out."""
     with zipfile.ZipFile(_ZIP) as tmp_zip:
       tmp_names = tmp_zip.namelist()
-    self.assertEqual([n for n in tmp_names if n.endswith(".pyc")], [])
+    self.assertEqual(
+      [tmp_n for tmp_n in tmp_names if tmp_n.endswith(".pyc")], []
+    )
     tmp_unsafe = re.compile(r"^(/|[A-Za-z]:)|(^|/)\.\.(/|$)")
-    self.assertEqual([n for n in tmp_names if tmp_unsafe.search(n)], [])
+    self.assertEqual(
+      [tmp_n for tmp_n in tmp_names if tmp_unsafe.search(tmp_n)], []
+    )
 
 
 if __name__ == "__main__":
