@@ -9,6 +9,7 @@ exports_files(
         "alternative_design/alt_logo.png",
         "os_specific/linux/splash.png",
         "os_specific/macos/splash.png",
+        "os_specific/windows/logo.ico",
         "os_specific/windows/splash.png",
         "pyproject.toml",
     ],

@@ -1,0 +1,12 @@
+# The Windows packages of the app: the C++ runtime it bundles, the portable
+# ZIP and the Inno Setup installer.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+# Reads PE import tables, for the tests that check the bundled runtimes.
+py_library(
+    name = "pe_imports",
+    srcs = ["pe_imports.py"],
+    imports = ["."],
+    visibility = ["//distribution:__subpackages__"],
+)
