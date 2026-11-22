@@ -33,7 +33,9 @@ def _elf(needed: tuple[str, ...], extra: bytes = b"") -> bytes:
   tmp_dynamic = tmp_strtab + len(tmp_strings) + (-len(tmp_strings) % 8)
   tmp_entries = [(1, tmp_offset) for tmp_offset in tmp_offsets]
   tmp_entries += [(5, tmp_strtab), (0, 0)]
-  tmp_dynamic_bytes = b"".join(struct.pack("<qQ", *e) for e in tmp_entries)
+  tmp_dynamic_bytes = b"".join(
+    struct.pack("<qQ", *tmp_entry) for tmp_entry in tmp_entries
+  )
   tmp_size = tmp_dynamic + len(tmp_dynamic_bytes) + len(extra)
   tmp_header = (
     b"\x7fELF"

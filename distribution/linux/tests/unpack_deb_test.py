@@ -44,14 +44,14 @@ def _tar_xz(members: dict[str, bytes], links: dict[str, str]) -> bytes:
   tmp_buffer = io.BytesIO()
   with tarfile.open(fileobj=tmp_buffer, mode="w:xz") as tmp_tar:
     for tmp_name, tmp_data in members.items():
-      tmp_info = tarfile.TarInfo(tmp_name)
-      tmp_info.size = len(tmp_data)
-      tmp_tar.addfile(tmp_info, io.BytesIO(tmp_data))
+      tmp_member = tarfile.TarInfo(tmp_name)
+      tmp_member.size = len(tmp_data)
+      tmp_tar.addfile(tmp_member, io.BytesIO(tmp_data))
     for tmp_name, tmp_target in links.items():
-      tmp_info = tarfile.TarInfo(tmp_name)
-      tmp_info.type = tarfile.SYMTYPE
-      tmp_info.linkname = tmp_target
-      tmp_tar.addfile(tmp_info)
+      tmp_member = tarfile.TarInfo(tmp_name)
+      tmp_member.type = tarfile.SYMTYPE
+      tmp_member.linkname = tmp_target
+      tmp_tar.addfile(tmp_member)
   return tmp_buffer.getvalue()
 
 

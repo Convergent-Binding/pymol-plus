@@ -65,18 +65,18 @@ def extract(deb: pathlib.Path, member: str) -> bytes:
     fileobj=io.BytesIO(tmp_members["data.tar.xz"]), mode="r:xz"
   ) as tmp_tar:
     tmp_names = {
-      posixpath.normpath(tmp_info.name.removeprefix("./").lstrip("/")): tmp_info
-      for tmp_info in tmp_tar.getmembers()
+      posixpath.normpath(tmp_member.name.removeprefix("./").lstrip("/")): tmp_member
+      for tmp_member in tmp_tar.getmembers()
     }
     tmp_path = posixpath.normpath(member)
     for _ in range(8):
       if tmp_path not in tmp_names:
         raise KeyError(member)
-      tmp_info = tmp_names[tmp_path]
-      if not tmp_info.issym():
-        return tmp_tar.extractfile(tmp_info).read()
+      tmp_member = tmp_names[tmp_path]
+      if not tmp_member.issym():
+        return tmp_tar.extractfile(tmp_member).read()
       tmp_path = posixpath.normpath(
-        posixpath.join(posixpath.dirname(tmp_path), tmp_info.linkname)
+        posixpath.join(posixpath.dirname(tmp_path), tmp_member.linkname)
       )
   raise KeyError(member)
 

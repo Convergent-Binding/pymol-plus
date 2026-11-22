@@ -389,7 +389,8 @@ class AssembleBundleTest(unittest.TestCase):
     )
     tmp_qt_lib = tmp_out / "runtime" / "lib" / "python3.13" / "site-packages"
     self.assertEqual(
-      (tmp_qt_lib / "PySide6" / "Qt" / "lib" / "libxcb-cursor.so.0").read_text(),
+      (tmp_qt_lib / "PySide6" / "Qt" / "lib" / "libxcb-cursor.so.0")
+      .read_text(),
       "cursor",
     )
 

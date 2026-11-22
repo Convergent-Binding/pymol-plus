@@ -39,8 +39,8 @@ def _tar_members(data: bytes) -> dict[str, tarfile.TarInfo]:
   """
   with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tmp_tar:
     return {
-      tmp_info.name.removeprefix("./").lstrip("/").rstrip("/"): tmp_info
-      for tmp_info in tmp_tar.getmembers()
+      tmp_member.name.removeprefix("./").lstrip("/").rstrip("/"): tmp_member
+      for tmp_member in tmp_tar.getmembers()
     }
 
 
@@ -55,9 +55,9 @@ def _tar_text(data: bytes, name: str) -> str:
     Its text.
   """
   with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as tmp_tar:
-    for tmp_info in tmp_tar.getmembers():
-      if tmp_info.name.removeprefix("./").lstrip("/") == name:
-        return tmp_tar.extractfile(tmp_info).read().decode("utf-8")
+    for tmp_member in tmp_tar.getmembers():
+      if tmp_member.name.removeprefix("./").lstrip("/") == name:
+        return tmp_tar.extractfile(tmp_member).read().decode("utf-8")
   raise KeyError(name)
 
 
@@ -69,10 +69,14 @@ class PackagesTest(unittest.TestCase):
     """Splits the .deb into its control and data archives."""
     tmp_members = unpack_deb._ar_members(pathlib.Path(_DEB).read_bytes())
     cls.control = next(
-      v for k, v in tmp_members.items() if k.startswith("control.tar")
+      tmp_data
+      for tmp_name, tmp_data in tmp_members.items()
+      if tmp_name.startswith("control.tar")
     )
     cls.data = next(
-      v for k, v in tmp_members.items() if k.startswith("data.tar")
+      tmp_data
+      for tmp_name, tmp_data in tmp_members.items()
+      if tmp_name.startswith("data.tar")
     )
 
   def test_tarball_top_folder(self) -> None:

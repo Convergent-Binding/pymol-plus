@@ -100,7 +100,11 @@ def needed_libraries(path: pathlib.Path) -> list[str]:
   """
   tmp_data = path.read_bytes()
   tmp_segments = _segments(tmp_data)
-  tmp_dynamic = [s for s in tmp_segments if s[0] == _PT_DYNAMIC]
+  tmp_dynamic = [
+    tmp_segment
+    for tmp_segment in tmp_segments
+    if tmp_segment[0] == _PT_DYNAMIC
+  ]
   if not tmp_dynamic:
     return []
   _, tmp_offset, _, tmp_size = tmp_dynamic[0]
