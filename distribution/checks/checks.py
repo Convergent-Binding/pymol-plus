@@ -93,14 +93,38 @@ def tool(name: str) -> pathlib.Path:
   raise LookupError(f"{name} is not among the checks' runfiles")
 
 
+def _checkout_root(folder: pathlib.Path) -> pathlib.Path:
+  """Finds the top folder of the checkout a folder lies in.
+
+  Args:
+    folder: A folder of the checkout, or the top folder itself.
+
+  Returns:
+    git's top folder; the folder itself if git is missing or it is no
+    checkout.
+  """
+  try:
+    tmp_result = subprocess.run(
+      ["git", "rev-parse", "--show-toplevel"],
+      cwd=folder,
+      capture_output=True,
+      text=True,
+      check=True,
+    )
+  except (OSError, subprocess.CalledProcessError):
+    return folder
+  return pathlib.Path(tmp_result.stdout.strip()).resolve()
+
+
 def _tracked_files(root: pathlib.Path) -> list[str]:
   """Lists the files of the checkout, as paths relative to its root.
 
   Args:
-    root: The checkout.
+    root: The checkout's top folder.
 
   Returns:
-    git's tracked files; every file outside .git if git is missing or the
+    git's tracked files that exist (a file deleted but not yet removed from
+    git is left out); every file outside .git if git is missing or the
     folder is no checkout.
   """
   try:
@@ -111,9 +135,9 @@ def _tracked_files(root: pathlib.Path) -> list[str]:
       check=True,
     )
     return [
-      tmp_path.decode("utf-8")
+      tmp_name
       for tmp_path in tmp_result.stdout.split(b"\0")
-      if tmp_path
+      if tmp_path and (root / (tmp_name := tmp_path.decode("utf-8"))).is_file()
     ]
   except (OSError, subprocess.CalledProcessError):
     return sorted(
@@ -140,17 +164,19 @@ def _run(
     env: The environment; the current one if None.
 
   Returns:
-    Whether the tool passed.
+    Whether the tool passed; not if it had no files, as the checkout
+    always has some and none means the check looked in the wrong place.
   """
   if not files:
-    print(f"{title}: no files to check")
-    return True
+    print(f"{title}: no files to check, FAILED")
+    return False
   tmp_result = subprocess.run(
     [*command, *files],
     cwd=cwd,
     env=env,
     capture_output=True,
-    text=True,
+    encoding="utf-8",
+    errors="replace",
     check=False,
   )
   tmp_output = (tmp_result.stdout + tmp_result.stderr).strip()
@@ -182,7 +208,7 @@ def main(argv: list[str]) -> int:
     help="the checkout (default: the workspace bazel run started in)",
   )
   tmp_arguments = tmp_parser.parse_args(argv)
-  tmp_root = pathlib.Path(tmp_arguments.root).resolve()
+  tmp_root = _checkout_root(pathlib.Path(tmp_arguments.root).resolve())
   tmp_files = _tracked_files(tmp_root)
   tmp_app_files = [
     tmp_path.removeprefix(_APP + "/")

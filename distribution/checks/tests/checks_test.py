@@ -1,12 +1,13 @@
 """checks finds its tools and runs them on a tree, finding each kind of problem.
 
-The fixture trees are built here, without git, so the checker also takes
-its file walk instead of `git ls-files`.
+The fixture trees are built here. Most have no git, so the checker takes
+its file walk; one is a git checkout, for `git ls-files`.
 """
 
 import contextlib
 import io
 import pathlib
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -142,8 +143,8 @@ class MainTest(unittest.TestCase):
     self.assertIn("ci.yaml", tmp_output)
     self.assertNotIn("upstream.py", tmp_output)
 
-  def test_clean_tree_passes(self) -> None:
-    """Without the problems every check passes."""
+  def _fix_problems(self) -> None:
+    """Rewrites the tree's three problem files without their problems."""
     self._write("distribution/tool.py", "import os\n\n\nprint(os.sep)\n")
     self._write("distribution/run.sh", '#!/bin/sh\necho "$1"\n')
     self._write(
@@ -156,9 +157,71 @@ class MainTest(unittest.TestCase):
       '      - run: echo "$HOME"\n',
     )
 
+  def _git(self, *arguments: str) -> None:
+    """Runs git in the tree.
+
+    Args:
+      *arguments: git's arguments.
+    """
+    subprocess.run(
+      [
+        "git",
+        "-c",
+        "user.name=checks",
+        "-c",
+        "user.email=checks@example.invalid",
+        "-c",
+        "commit.gpgsign=false",
+        *arguments,
+      ],
+      cwd=self.root,
+      capture_output=True,
+      check=True,
+    )
+
+  def test_clean_tree_passes(self) -> None:
+    """Without the problems every check passes."""
+    self._fix_problems()
+
     tmp_status, tmp_output = self._main()
 
     self.assertEqual(tmp_status, 0, tmp_output)
+
+  @unittest.skipUnless(shutil.which("git"), "needs git")
+  def test_git_checkout_from_a_subfolder(self) -> None:
+    """Started below the top, it checks the tracked files that still exist.
+
+    Untracked files and tracked ones deleted from the disk stay unchecked.
+    """
+    self._fix_problems()
+    self._write("distribution/gone.py", "import os\n")
+    self._write("distribution/gone", '#!/bin/sh\necho "$1"\n')
+    self._git("init", "-q")
+    self._git("add", "-A")
+    self._git("commit", "-q", "-m", "fixture")
+    (self.root / "distribution" / "gone.py").unlink()
+    (self.root / "distribution" / "gone").unlink()
+    self._write("distribution/untracked.py", "import os\n")
+    self._write("distribution/untracked.sh", "echo $1\n")
+
+    tmp_output = io.StringIO()
+    with contextlib.redirect_stdout(tmp_output):
+      tmp_status = checks.main(["--root", str(self.root / "distribution")])
+
+    self.assertEqual(tmp_status, 0, tmp_output.getvalue())
+    self.assertIn("ruff: 2 files", tmp_output.getvalue())
+    self.assertIn("shellcheck: 1 files", tmp_output.getvalue())
+    self.assertIn("actionlint: 1 files", tmp_output.getvalue())
+
+  def test_nothing_to_check_fails(self) -> None:
+    """A tree with no files for the tools fails instead of passing."""
+    with tempfile.TemporaryDirectory() as tmp_empty:
+      tmp_output = io.StringIO()
+      with contextlib.redirect_stdout(tmp_output):
+        tmp_status = checks.main(["--root", tmp_empty])
+
+    self.assertEqual(tmp_status, 1)
+    self.assertIn("no files to check", tmp_output.getvalue())
 
   def test_fix_applies_ruff_fixes(self) -> None:
     """--fix removes the unused import."""
