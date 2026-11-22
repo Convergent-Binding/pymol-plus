@@ -111,12 +111,13 @@ Dependabot opens weekly, grouped pull requests for the Python packages (the chec
 included) and the GitHub Actions, with versions that are at least 14 days old. Every update
 waits for a review and is merged by hand, like any other pull request.
 Deliberate limits:
-- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request,
-  because the files in `edited/` must be ported to the new version first
-  (`//distribution/edited:edited_base_test` fails until they are).
 - **PySide6/shiboken6** stay at 6.9: 6.10 and newer need macOS 13 and glibc 2.34, which
   would drop macOS 12 and RHEL/AlmaLinux 8.
 - **biopython** stays at 1.86: newer versions have no Python 3.13 wheels for Intel Macs.
+
+PyMOL itself is no dependency Dependabot updates: the app bundles the wheel built from this
+repository. When a PyMOL file that `edited/` replaces changes in `modules/`,
+`//distribution/edited:edited_base_test` fails until the edits are ported.
 
 ## Releasing a new version
 The version in [pyproject.toml](pyproject.toml) is the only place to change. The build,

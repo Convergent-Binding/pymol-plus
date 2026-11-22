@@ -42,7 +42,8 @@ Python runtime (python-build-standalone)
     SQLite                public domain
     Tcl/Tk 8.6            Tcl/Tk license (BSD-style)
     libffi                MIT license
-    bzip2                 bzip2 license (BSD-style), see Python/LICENSE.txt
+    bzip2                 bzip2 license (BSD-style); Windows: see
+                          Python/LICENSE.txt
     xz (liblzma)          public domain / 0BSD
     zlib                  zlib license
     mpdecimal             BSD license
@@ -50,6 +51,22 @@ Python runtime (python-build-standalone)
     libX11, libxcb        MIT licenses (Linux, for Tk)
     libuuid               BSD license (Linux)
     Source code: https://github.com/astral-sh/python-build-standalone
+
+Libraries built into PyMOL's _cmd (every platform)
+    PyMOL's native module links these statically; each license text is in
+    this folder:
+    FreeType              FreeType License, see FreeType-FTL.txt
+    GLEW                  Modified BSD and MIT licenses, see GLEW.txt
+    GLM                   MIT license, see GLM.txt
+    libpng                PNG Reference Library License v2, see libpng.txt
+    libxml2               MIT license, see libxml2.txt
+    zlib                  zlib license, see zlib.txt
+    netCDF-C              BSD-3-Clause, see netCDF-C.txt
+    pocketfft             BSD-3-Clause, see pocketfft.txt
+    VMD molfile plugins   UIUC Open Source License, see
+                          UIUC-molfile-plugins.txt
+    Portions of this software are copyright (C) 2025 The FreeType Project
+    (www.freetype.org). All rights reserved.
 
 libgomp, the GNU OpenMP runtime (Linux only)
     From GCC, under the GPL v3 with the GCC Runtime Library Exception, see
