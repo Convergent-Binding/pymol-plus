@@ -108,7 +108,8 @@ def _checkout_root(folder: pathlib.Path) -> pathlib.Path:
       ["git", "rev-parse", "--show-toplevel"],
       cwd=folder,
       capture_output=True,
-      text=True,
+      # git writes paths in UTF-8, not in the Windows code page
+      encoding="utf-8",
       check=True,
     )
   except (OSError, subprocess.CalledProcessError):

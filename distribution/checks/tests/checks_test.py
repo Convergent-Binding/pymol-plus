@@ -90,8 +90,12 @@ class MainTest(unittest.TestCase):
   """Runs the three checks on fixture trees."""
 
   def setUp(self) -> None:
-    """Writes a tree with one problem for each tool."""
-    self._dir = tempfile.TemporaryDirectory()
+    """Writes a tree with one problem for each tool.
+
+    The tree's folder name has a space and an umlaut, as a user's checkout
+    may: git and the tools write such paths in UTF-8 on Windows too.
+    """
+    self._dir = tempfile.TemporaryDirectory(prefix="prüf ")
     self.root = pathlib.Path(self._dir.name)
     (self.root / "distribution" / "edited").mkdir(parents=True)
     (self.root / ".github" / "workflows").mkdir(parents=True)
