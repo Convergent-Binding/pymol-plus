@@ -90,12 +90,12 @@ The cx_Freeze build (`automator.sh`, `requirements.txt`) is no longer used and g
 the cleanup of the Bazel migration.
 
 ### Quick checks
-The CI job "checks" lints the Python code (ruff), the shell scripts (shellcheck) and the
-GitHub workflows (actionlint) in about half a minute. Run the same checks locally with
-[uv](https://docs.astral.sh/uv/):
+The CI job "checks" lints the app's Python code (ruff) and shell scripts (shellcheck) and
+the repository's GitHub workflows (actionlint). Run the same checks locally, with the tools
+Bazel fetches at the versions in `checks_requirements.in`:
 ```shell
-uvx pre-commit run --all-files    # once
-uvx pre-commit install            # before every commit from now on
+bazel run //distribution:checks            # check
+bazel run //distribution:checks -- --fix   # also apply ruff's fixes
 ```
 
 ### CI and pull requests
@@ -109,8 +109,8 @@ uvx pre-commit install            # before every commit from now on
   Apple Silicon, or dropped).
 
 ### Dependency updates (Dependabot)
-Dependabot opens weekly, grouped pull requests for the Python packages, the GitHub Actions
-and the pre-commit hooks, with versions that are at least 14 days old. Every update
+Dependabot opens weekly, grouped pull requests for the Python packages (the check tools'
+included) and the GitHub Actions, with versions that are at least 14 days old. Every update
 waits for a review and is merged by hand, like any other pull request.
 Deliberate limits:
 - **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request,

@@ -1,0 +1,44 @@
+load("@rules_python//python:defs.bzl", "py_binary", "py_test")
+
+# The quick checks' tools: the program each pinned wheel brings in its bin/.
+# The hub has wheels for Python 3.13 only, so only targets that set it may
+# depend on them.
+_TOOLS = [
+    "@app_checks_pip//actionlint_py:data",
+    "@app_checks_pip//ruff:data",
+    "@app_checks_pip//shellcheck_py:data",
+]
+
+# Where the checker finds them, as runfiles paths.
+_TOOLS_ENV = {
+    "CHECKS_TOOLS": " ".join(["$(rlocationpaths {})".format(tool) for tool in _TOOLS]),
+}
+
+# ruff, ShellCheck and actionlint on the checkout:
+#   bazel run //distribution:checks [-- --fix]
+py_binary(
+    name = "checks",
+    srcs = ["checks.py"],
+    data = _TOOLS,
+    env = _TOOLS_ENV,
+    legacy_create_init = False,
+    python_version = "3.13",
+    visibility = ["//distribution:__pkg__"],
+    deps = ["@rules_python//python/runfiles"],
+)
+
+py_test(
+    name = "checks_test",
+    size = "small",
+    srcs = [
+        "checks.py",
+        "tests/checks_test.py",
+    ],
+    data = _TOOLS,
+    env = _TOOLS_ENV,
+    imports = ["."],
+    legacy_create_init = False,
+    main = "tests/checks_test.py",
+    python_version = "3.13",
+    deps = ["@rules_python//python/runfiles"],
+)
