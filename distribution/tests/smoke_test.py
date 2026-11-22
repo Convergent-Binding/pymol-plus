@@ -49,16 +49,35 @@ def check_bundled_modules_and_data() -> None:
 
 
 def check_licenses() -> None:
-  """The license texts must be shipped next to the executable (macOS: in Resources)."""
-  exe_dir = pathlib.Path(os.path.realpath(sys.executable)).parent
-  candidates = (exe_dir / "licenses", exe_dir.parent / "Resources" / "licenses")
-  licenses_dir = next((d for d in candidates if d.is_dir()), None)
-  assert licenses_dir is not None, f"licenses folder missing next to {exe_dir}"
+  """The license texts must be shipped with the app.
+
+  The Bazel-built app keeps them in the folder its launcher sets as
+  PYMOL_APP_ROOT; the cx_Freeze app next to the executable (macOS: in
+  Resources).
+  """
+  tmp_app_root = os.environ.get("PYMOL_APP_ROOT")
+  tmp_exe_dir = pathlib.Path(os.path.realpath(sys.executable)).parent
+  if tmp_app_root:
+    tmp_candidates = (pathlib.Path(tmp_app_root) / "licenses",)
+  else:
+    tmp_candidates = (
+      tmp_exe_dir / "licenses",
+      tmp_exe_dir.parent / "Resources" / "licenses",
+    )
+  tmp_licenses_dir = next(
+    (tmp_dir for tmp_dir in tmp_candidates if tmp_dir.is_dir()), None
+  )
+  tmp_where = tmp_candidates[0].parent
+  assert tmp_licenses_dir is not None, f"licenses folder missing in {tmp_where}"
   for tmp_name in ("README.txt", "THIRD-PARTY-NOTICES.txt", "pymol-open-source-whl/LICENSE",
                    "LGPL-3.0.txt", "PySide6_Essentials/LGPL-3.0.txt", "Python/LICENSE.txt"):
-    assert (licenses_dir / tmp_name).is_file(), f"license file missing: {tmp_name}"
-  if sys.platform == "win32":
-    assert (exe_dir / "share" / "licenses" / "vc_redist").is_dir(), "license of the C++ runtime missing"
+    tmp_text = tmp_licenses_dir / tmp_name
+    assert tmp_text.is_file(), f"license file missing: {tmp_name}"
+  # Only the cx_Freeze app bundles the C++ runtime so far; the Bazel-built
+  # app does not yet.
+  if sys.platform == "win32" and not tmp_app_root:
+    tmp_vc_redist = tmp_exe_dir / "share" / "licenses" / "vc_redist"
+    assert tmp_vc_redist.is_dir(), "license of the C++ runtime missing"
 
 
 def check_certificates() -> None:

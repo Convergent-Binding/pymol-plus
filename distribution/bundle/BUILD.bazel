@@ -1,0 +1,130 @@
+# The app bundle: a python-build-standalone CPython 3.13 with the app's
+# packages and the in-repo PyMOL in its site-packages, and a native launcher.
+# See .opp/plans/features/app-bazel-build.md.
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load("//tools/bazel:wheel_merge.bzl", "merge_wheel_files")
+load(":app_bundle.bzl", "app_bundle")
+
+exports_files([
+    "tests/edited_base_test.py",
+    "tests/run_bundle_smoke_test.py",
+])
+
+# The packages of distribution/requirements.in in one site-packages, as pip
+# would install them: PySide6 finds shiboken6 and Qt only as real siblings.
+merge_wheel_files(
+    name = "site_packages",
+    python_version = "3.13",
+    visibility = ["//distribution:__subpackages__"],
+    wheel_files = [
+        "@app_pip//biopython:extracted_whl_files",
+        "@app_pip//msgpack:extracted_whl_files",
+        "@app_pip//numpy:extracted_whl_files",
+        "@app_pip//pmw:extracted_whl_files",
+        "@app_pip//pyside6_essentials:extracted_whl_files",
+        "@app_pip//rules:extracted_whl_files",
+        "@app_pip//shiboken6:extracted_whl_files",
+        "@app_pip//simplejson:extracted_whl_files",
+    ],
+)
+
+py_library(
+    name = "site_packages_lib",
+    testonly = True,
+    data = [":site_packages"],
+    imports = ["site_packages/site-packages"],
+)
+
+# The merged packages import on Python 3.13, PySide6 with its Qt.
+py_test(
+    name = "pyside6_import_test",
+    size = "small",
+    srcs = ["tests/pyside6_import_test.py"],
+    # No __pycache__ in the merged tree, which the app bundle copies.
+    env = {"PYTHONDONTWRITEBYTECODE": "1"},
+    # No empty __init__.py in the runfiles, where one would shadow packages.
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":site_packages_lib"],
+)
+
+py_library(
+    name = "assemble_bundle_lib",
+    srcs = ["assemble_bundle.py"],
+    imports = ["."],
+)
+
+py_binary(
+    name = "assemble_bundle",
+    srcs = ["assemble_bundle.py"],
+    python_version = "3.13",
+)
+
+# The bundle layout, licenses and manifest, from small fake inputs.
+py_test(
+    name = "assemble_bundle_test",
+    size = "small",
+    srcs = ["tests/assemble_bundle_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":assemble_bundle_lib"],
+)
+
+config_setting(
+    name = "macos_arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+# The app for the target platform, in the Python 3.13 configuration's output
+# folder (not bazel-bin); `bazel cquery --output=files //distribution/bundle`
+# prints its path.
+app_bundle(
+    name = "bundle",
+    distributions = [
+        "pymol-open-source-whl",
+        "PySide6-Essentials",
+        "shiboken6",
+        "numpy",
+        "biopython",
+        "Pmw",
+        "msgpack",
+        "simplejson",
+        "rules",
+    ],
+    launcher = "//distribution/launcher",
+    licenses = ["//distribution:license_texts"],
+    lock = "//distribution:requirements_lock.txt",
+    overlays = {
+        "//distribution/edited:pmg_qt/pymol_gl_widget.py": "pmg_qt/pymol_gl_widget.py",
+        "//distribution/edited:pmg_qt/pymol_qt_gui.py": "pmg_qt/pymol_qt_gui.py",
+        "//distribution/edited:pymol/startup_wrapper.py": "pymol/startup_wrapper.py",
+        "//distribution:alternative_design/alt_logo.png": "pymol/data/pymol/icons/alt_logo.png",
+    } | select({
+        "@platforms//os:windows": {"//distribution:os_specific/windows/splash.png": "pymol/data/pymol/splash.png"},
+        "@platforms//os:macos": {"//distribution:os_specific/macos/splash.png": "pymol/data/pymol/splash.png"},
+        "//conditions:default": {"//distribution:os_specific/linux/splash.png": "pymol/data/pymol/splash.png"},
+    }),
+    project_license = "//distribution:LICENSE",
+    pyproject = "//distribution:pyproject.toml",
+    python_license = select({
+        "@platforms//os:windows": "@python_3_13_license_windows_x86_64//:LICENSE.txt",
+        ":macos_arm64": "@python_3_13_license_macos_arm64//:LICENSE.txt",
+        "@platforms//os:macos": "@python_3_13_license_macos_x86_64//:LICENSE.txt",
+        "//conditions:default": "@python_3_13_license_linux_x86_64//:LICENSE.txt",
+    }),
+    python_version = "3.13",
+    runtime = "@python_3_13//:files",
+    site_packages = ":site_packages",
+    target = select({
+        "@platforms//os:windows": "windows-x86_64",
+        ":macos_arm64": "macos-arm64",
+        "@platforms//os:macos": "macos-x86_64",
+        "//conditions:default": "linux-x86_64",
+    }),
+    visibility = ["//distribution:__subpackages__"],
+    wheel = "//tools/bazel/wheel",
+)

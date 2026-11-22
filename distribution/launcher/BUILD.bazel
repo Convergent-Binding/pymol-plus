@@ -1,0 +1,53 @@
+# The app's native launcher: it starts the bundle's own Python on PyMOL's
+# startup module. See launcher.c for its contract.
+
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_python//python:defs.bzl", "py_test")
+
+# Named like the app, so the binary is PyMOL-Open-Source(.exe).
+cc_binary(
+    name = "PyMOL-Open-Source",
+    srcs = ["launcher.c"],
+    linkopts = select({
+        # A GUI program: no console window opens next to PyMOL's.
+        "@platforms//os:windows": [
+            "/SUBSYSTEM:WINDOWS",
+            "/ENTRY:wmainCRTStartup",
+        ],
+        "//conditions:default": [],
+    }),
+    local_defines = select({
+        "@platforms//os:windows": [
+            "UNICODE",
+            "_UNICODE",
+        ],
+        "//conditions:default": [],
+    }),
+)
+
+alias(
+    name = "launcher",
+    actual = ":PyMOL-Open-Source",
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# Stands in for the runtime's interpreter in launcher_test.
+cc_binary(
+    name = "fake_python",
+    testonly = True,
+    srcs = ["fake_python.c"],
+)
+
+py_test(
+    name = "launcher_test",
+    size = "small",
+    srcs = ["launcher_test.py"],
+    args = [
+        "$(rootpath :PyMOL-Open-Source)",
+        "$(rootpath :fake_python)",
+    ],
+    data = [
+        ":PyMOL-Open-Source",
+        ":fake_python",
+    ],
+)

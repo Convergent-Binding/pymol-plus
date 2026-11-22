@@ -1,0 +1,31 @@
+# Upstream PyMOL files with marked edits ("BEGIN EDITED CODE SEGMENT") that
+# replace the originals in the app bundle, and startup_wrapper.py, the app's
+# entry module.
+
+load("@rules_python//python:defs.bzl", "py_test")
+
+exports_files(
+    glob(["**/*.py"]),
+    visibility = ["//distribution:__subpackages__"],
+)
+
+filegroup(
+    name = "overlays",
+    srcs = glob(["**/*.py"]),
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# Fails when a modules/ original changes after its copy here was made.
+py_test(
+    name = "edited_base_test",
+    size = "small",
+    srcs = ["//distribution/bundle:tests/edited_base_test.py"],
+    data = [
+        "upstream.sha256",
+        ":overlays",
+        "//modules/pmg_qt",
+    ],
+    # The test lists edited/pmg_qt/*.py; no generated __init__.py there.
+    legacy_create_init = False,
+    main = "//distribution/bundle:tests/edited_base_test.py",
+)

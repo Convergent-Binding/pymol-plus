@@ -1,0 +1,38 @@
+load("@rules_python//python/uv:lock.bzl", "lock")
+
+exports_files(["requirements_lock.txt"])
+
+# The app's own files that //distribution/bundle puts into the app.
+exports_files(
+    [
+        "LICENSE",
+        "alternative_design/alt_logo.png",
+        "os_specific/linux/splash.png",
+        "os_specific/macos/splash.png",
+        "os_specific/windows/splash.png",
+        "pyproject.toml",
+    ],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+filegroup(
+    name = "license_texts",
+    srcs = glob(["licenses/*.txt"]),
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# Locks requirements.in, the packages bundled into the app, into
+# requirements_lock.txt for the app's Python 3.13, with the uv binary
+# rules_python fetches. Tagged manual, as it needs the network; update the
+# lock with `bazel run //distribution:requirements.update`.
+lock(
+    name = "requirements",
+    srcs = ["requirements.in"],
+    out = "requirements_lock.txt",
+    args = [
+        "--universal",
+        "--python-version",
+        "3.13",
+    ],
+    python_version = "3.13",
+)

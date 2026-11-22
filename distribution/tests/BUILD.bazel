@@ -1,0 +1,22 @@
+# Tests of the Bazel-built app; the shell scripts here also test the
+# cx_Freeze app and the installed packages in build_app.yaml.
+
+load("@rules_python//python:defs.bzl", "py_test")
+
+exports_files(["smoke_test.py"])
+
+# The app, moved to a new folder, passes smoke_test.py headless.
+py_test(
+    name = "bundle_smoke_test",
+    size = "medium",
+    srcs = ["//distribution/bundle:tests/run_bundle_smoke_test.py"],
+    args = [
+        "$(rootpath //distribution/bundle)",
+        "$(rootpath :smoke_test.py)",
+    ],
+    data = [
+        ":smoke_test.py",
+        "//distribution/bundle",
+    ],
+    main = "//distribution/bundle:tests/run_bundle_smoke_test.py",
+)

@@ -1,0 +1,15 @@
+# Python packages bundled into the app, locked in requirements_lock.txt for
+# Python 3.13 with
+#   bazel run //distribution:requirements.update
+# PyMOL itself is not listed: the app bundles the wheel Bazel builds from this
+# repository (//tools/bazel/wheel:wheel).
+
+# 1.86: the newest biopython with Python 3.13 wheels for Intel Macs
+biopython==1.86
+msgpack==1.2.4
+numpy==2.5.4
+Pmw==2.1.1
+PySide6-Essentials==6.9.3
+rules==3.5
+shiboken6==6.9.3
+simplejson==4.2.0
