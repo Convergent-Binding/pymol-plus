@@ -41,7 +41,7 @@ Quoted from AGENTS.md and the current build; every step holds them:
 
 ## Steps
 
-Each step is one branch and one pull request into `production`; until step 7 the cx_Freeze path keeps building the releases, so every step can land on its own.
+Each step is one branch and one pull request into the feature branch `bazel-app-packaging`, which is cut from `production`; the step's pull request is merged there once its CI is green. When all seven steps are in, one pull request takes `bazel-app-packaging` into `production`, and the developer merges that one. Until step 7 the cx_Freeze path keeps building the releases, so `bazel-app-packaging` stays releasable after every step.
 
 1. **Runtime bundle** (`app-bazel-runtime-bundle`): the app's locked dependency hub `@app_pip`, the merged `site-packages`, the in-repo PyMOL with the overlays, the native launcher, the manifest and licenses, assembled as `//distribution/bundle:bundle` for the host platform; a relocated headless smoke test runs in `bazel test //...` on Windows x64, macOS arm64/x86_64 and Linux x86_64. Done when the Bazel workflow passes it on all four platforms. Plan: `.opp/plans/app-bazel-runtime-bundle.md`.
 2. **Windows packages** (`app-bazel-windows`): the MSVC C++ and OpenMP runtimes in the bundle (found through the Visual Studio redistributable folder by a repository rule), the launcher's icon and version resource, `pkg_zip` for the portable ZIP, Inno Setup 7 fetched by checksum and run by a local action for the installer, `tests/check_msvc_runtime.py` as a Bazel test. `build-windows` in `build_app.yaml` switches to Bazel and keeps every install, update, uninstall and portable test. Done when that job is green with the Bazel-built files.

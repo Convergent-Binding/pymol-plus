@@ -22,7 +22,9 @@ name: Bazel
 # branches and v* tags.
 on:
   pull_request:
-    branches: [production]
+    # bazel-app-packaging collects the steps that move the app build to Bazel
+    # (.opp/plans/features/app-bazel-build.md) until they go into production.
+    branches: [production, bazel-app-packaging]
     paths-ignore:
       # The app's website and the workflows and settings of the app's releases
       - 'distribution/docs/**'
