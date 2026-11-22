@@ -56,8 +56,9 @@ distribution/README.md.
 - `bazel test //distribution/...`: also checks every binary's libraries and glibc 2.28
 - Linux packages on 8 distributions: `distribution/tests/test_linux_package.sh <package>` in a container
 
-**App checks** (in `distribution/`):
-- `uvx pre-commit run --all-files`: ruff, shellcheck, actionlint (the CI job "checks")
+**App checks** (anywhere in the repository):
+- `bazel run //distribution:checks`: ruff, shellcheck, actionlint (the CI job "checks");
+  `-- --fix` applies ruff's fixes
 
 **Rules:**
 - Pull requests get the Bazel check only; the wheel matrix (`wheels.yaml`, 35-40 minutes) runs on
