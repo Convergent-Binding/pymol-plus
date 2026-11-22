@@ -73,9 +73,9 @@ Libraries built into PyMOL's _cmd (every platform)
 
 Third-party code in PyMOL's own sources (every platform)
     PyMOL's _cmd also contains the Mersenne Twister, CE-align, a marching
-    cubes implementation from ilastik, US-align, GLUT bitmap fonts, and
-    DejaVu, Bitstream Vera, Arev and Gentium font data, each under its own
-    notice; see pymol-third-party-notices.txt.
+    cubes implementation from ilastik, US-align, two matrix routines from
+    Mesa, GLUT bitmap fonts, and DejaVu, Bitstream Vera, Arev and Gentium
+    font data, each under its own notice; see pymol-third-party-notices.txt.
 
 libgomp, the GNU OpenMP runtime (Linux only)
     From GCC, under the GPL v3 with the GCC Runtime Library Exception, see
