@@ -73,8 +73,8 @@ class PackagesTest(unittest.TestCase):
       for tmp_name, tmp_data in tmp_members.items()
       if tmp_name.startswith("control.tar")
     )
-    cls.data = next(
-      tmp_data
+    cls.data_name, cls.data = next(
+      (tmp_name, tmp_data)
       for tmp_name, tmp_data in tmp_members.items()
       if tmp_name.startswith("data.tar")
     )
@@ -126,6 +126,11 @@ class PackagesTest(unittest.TestCase):
     tmp_link = tmp_members["usr/bin/PyMOL-Open-Source"]
     self.assertTrue(tmp_link.issym())
     self.assertEqual(tmp_link.linkname, f"/{_INSTALL}/PyMOL-Open-Source")
+
+  def test_deb_data_compressed(self) -> None:
+    """The app goes into the .deb gzip-compressed, as fpm packed it."""
+    self.assertEqual(self.data_name, "data.tar.gz")
+    self.assertEqual(self.data[:2], b"\x1f\x8b")
 
   def test_desktop_entry_names_install_dir(self) -> None:
     """The desktop entry starts the installed app, not the template path."""

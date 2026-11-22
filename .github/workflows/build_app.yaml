@@ -405,7 +405,10 @@ jobs:
 
       - name: Build the .tar.gz, .deb and .rpm packages
         timeout-minutes: 45
-        run: bazel build //distribution/linux:packages
+        # rpmbuild's output, printed only when it fails, runs to megabytes
+        run: >-
+          bazel build //distribution/linux:packages
+          --experimental_ui_max_stdouterr_bytes=16777216
 
       - name: Test the app and the packages with Bazel
         # Also checks every binary's libraries and glibc 2.28

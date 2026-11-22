@@ -128,6 +128,27 @@ def needed_libraries(path: pathlib.Path) -> list[str]:
   ]
 
 
+def version_names(path: pathlib.Path, prefix: str) -> set[str]:
+  """Reads the symbol version names with a prefix that an ELF file holds.
+
+  A library holds the versions it defines, a binary those it uses.
+
+  Args:
+    path: A shared library or executable.
+    prefix: The library's version prefix, such as GOMP_.
+
+  Returns:
+    Each full version name, such as GOMP_4.0 or GOMP_5.0.1.
+  """
+  tmp_pattern = re.compile(
+    re.escape(prefix.encode("ascii")) + rb"\d+(?:\.\d+)+"
+  )
+  return {
+    tmp_name.decode("ascii")
+    for tmp_name in tmp_pattern.findall(path.read_bytes())
+  }
+
+
 def glibc_versions(path: pathlib.Path) -> set[tuple[int, int]]:
   """Reads the glibc versions an ELF file's symbols ask for.
 

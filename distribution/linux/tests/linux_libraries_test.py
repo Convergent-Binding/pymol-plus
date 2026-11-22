@@ -58,8 +58,27 @@ def _optional(path: pathlib.Path) -> bool:
   return tmp_folder not in _REQUIRED_PLUGIN_FOLDERS
 
 
+def _found(path: pathlib.Path, name: str, bundled: set[str]) -> bool:
+  """Tells whether a needed library is in the app or on every system.
+
+  Args:
+    path: The binary that needs it.
+    name: Its DT_NEEDED entry, a soname or a path from $ORIGIN.
+    bundled: The names of the app's files.
+
+  Returns:
+    Whether the app ships it or the system is sure to have it.
+  """
+  if name.startswith("$ORIGIN/"):
+    return (path.parent / name.removeprefix("$ORIGIN/")).is_file()
+  return name in bundled or name in _SYSTEM
+
+
 class LinuxLibrariesTest(unittest.TestCase):
   """Reads every ELF file of the app."""
+
+  maxDiff = None
+  """Shows every missing library, not only the first."""
 
   def test_the_app_has_its_libraries(self) -> None:
     """libgomp and libxcb-cursor are bundled."""
@@ -76,9 +95,34 @@ class LinuxLibrariesTest(unittest.TestCase):
       for tmp_path in _binaries()
       if not _optional(tmp_path)
       for tmp_name in elf.needed_libraries(tmp_path)
-      if tmp_name not in tmp_bundled and tmp_name not in _SYSTEM
+      if not _found(tmp_path, tmp_name, tmp_bundled)
     )
 
+    self.assertEqual(tmp_missing, [])
+
+  def test_bundled_libgomp_has_every_version_used(self) -> None:
+    """The bundled libgomp defines each GOMP_ version the binaries use.
+
+    It comes from the build machine's GCC, which may be older than the
+    compiler _cmd was linked with.
+    """
+    tmp_binaries = _binaries()
+    tmp_gomp = next(
+      tmp_path for tmp_path in tmp_binaries if tmp_path.name == "libgomp.so.1"
+    )
+    tmp_defined = elf.version_names(tmp_gomp, "GOMP_")
+    tmp_users = [
+      tmp_path
+      for tmp_path in tmp_binaries
+      if "libgomp.so.1" in elf.needed_libraries(tmp_path)
+    ]
+    tmp_missing = sorted(
+      f"{tmp_path.relative_to(_BUNDLE)}: {tmp_name}"
+      for tmp_path in tmp_users
+      for tmp_name in elf.version_names(tmp_path, "GOMP_") - tmp_defined
+    )
+
+    self.assertTrue(tmp_users)
     self.assertEqual(tmp_missing, [])
 
   def test_glibc_at_most_2_28(self) -> None:

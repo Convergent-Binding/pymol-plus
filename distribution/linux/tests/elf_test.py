@@ -109,6 +109,20 @@ class ElfTest(unittest.TestCase):
 
     self.assertEqual(elf.glibc_versions(tmp_path), {(2, 17), (2, 28)})
 
+  def test_version_names(self) -> None:
+    """Full names with the prefix, not symbols or other libraries' versions."""
+    tmp_path = self._file(
+      "_cmd.so",
+      _elf(
+        (),
+        b"GOMP_4.0\0GOMP_5.0.1\0GOMP_parallel\0GOMP_PLUGIN_1.0\0OMP_1.0\0",
+      ),
+    )
+
+    self.assertEqual(
+      elf.version_names(tmp_path, "GOMP_"), {"GOMP_4.0", "GOMP_5.0.1"}
+    )
+
   def test_not_elf(self) -> None:
     """Text and Mach-O files are no ELF files."""
     tmp_text = self._file("x.py", b"print()\n")

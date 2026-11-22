@@ -77,24 +77,8 @@ def _use_app_user_model_id() -> None:
   )
 
 
-def _load_bundled_openmp() -> None:
-  """Loads the app's own libgomp on Linux before PyMOL's _cmd needs it.
-
-  _cmd links libgomp.so.1 (OpenMP), which a minimal system lacks and the
-  packages do not declare; the app ships it in the runtime's lib folder.
-  Loaded first and globally, it is the one _cmd's dependency resolves to.
-  """
-  if not sys.platform.startswith("linux"):
-    return
-  tmp_library = os.path.join(sys.prefix, "lib", "libgomp.so.1")
-  if os.path.isfile(tmp_library):
-    import ctypes
-    ctypes.CDLL(tmp_library, mode=ctypes.RTLD_GLOBAL)
-
-
 if __name__ == '__main__':
   _use_app_user_model_id()
-  _load_bundled_openmp()
   _use_system_ca_certificates()
   _use_pyside6()
   _use_whole_scale_on_wayland()

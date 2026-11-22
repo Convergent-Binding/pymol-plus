@@ -107,12 +107,14 @@ class LauncherTest(unittest.TestCase):
 
     self.assertEqual(tmp_result.returncode, 0, tmp_result.stderr)
     tmp_options = ["-I"]
+    tmp_module = "pymol.startup_wrapper"
     if not _WINDOWS:
       tmp_cache = self.root / "cache" / "PyMOL-Open-Source" / "pycache"
       tmp_options += ["-X", f"pycache_prefix={tmp_cache}"]
+      tmp_module = "pymol_app_start"
     self.assertEqual(
       json.loads(tmp_result.stdout.decode("utf-8"))["args"],
-      [*tmp_options, "-m", "pymol.startup_wrapper", "-cq", tmp_argument],
+      [*tmp_options, "-m", tmp_module, "-cq", tmp_argument],
     )
 
   @unittest.skipIf(_MACOS, "macOS runs Python in the launcher's process")

@@ -23,13 +23,15 @@
  *
  * On Linux it replaces itself with Python (execv), with bytecode in the
  * user's cache (-X pycache_prefix), as the packages install into /opt,
- * which users cannot write. On Windows it is a GUI
- * program, so no console window opens; it starts pythonw.exe with the rest
- * of its own command line verbatim (no re-quoting), hands on its standard
- * handles, so `-cq` output still reaches a pipe, and waits. On macOS it loads
- * <root>/runtime/lib/libpython3.X.dylib and runs PyMOL in its own process,
- * with the same isolation: macOS shows a process as an app only while its
- * executable is the bundle's own, for the Dock icon and the app menu.
+ * which users cannot write, and runs pymol_app_start instead, which loads
+ * the app's own libgomp before it runs pymol.startup_wrapper. On Windows it
+ * is a GUI program, so no console window opens; it starts pythonw.exe with
+ * the rest of its own command line verbatim (no re-quoting), hands on its
+ * standard handles, so `-cq` output still reaches a pipe, and waits. On
+ * macOS it loads <root>/runtime/lib/libpython3.X.dylib and runs PyMOL in its
+ * own process, with the same isolation: macOS shows a process as an app only
+ * while its executable is the bundle's own, for the Dock icon and the app
+ * menu.
  *
  * @copyright Copyright (c) 2026, Hannah Kullik.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -383,7 +385,7 @@ int main(int argc, char** argv)
   arguments[2] = "-X";
   arguments[3] = pycache;
   arguments[4] = "-m";
-  arguments[5] = "pymol.startup_wrapper";
+  arguments[5] = "pymol_app_start";
   for(int i = 1; i < argc; ++i) {
     arguments[i + 5] = argv[i];
   }
