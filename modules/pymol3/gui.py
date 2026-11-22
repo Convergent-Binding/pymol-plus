@@ -1,0 +1,265 @@
+# SPDX-License-Identifier: BSD-3-Clause
+"""Panels that plugins dock into PyMOL's main window.
+
+A plugin hands over its own widget and names one of the window's four dock
+areas; PyMOL wraps the widget in a dock widget and returns a ``DockPanel``
+to show, hide or remove it later::
+
+    from pymol.Qt import QtWidgets
+    from pymol3 import gui
+
+    def __init_plugin__(app=None):
+      gui.add_dock_panel(
+          QtWidgets.QLabel("Hello"), "My Plugin", area="left",
+          panel_id="my_plugin")
+
+Every function runs in PyMOL's Qt GUI only, from the GUI thread. Importing
+this module loads no Qt binding, so it imports in headless PyMOL too.
+"""
+
+from __future__ import annotations
+
+import importlib
+from typing import TYPE_CHECKING
+
+import pymol.gui
+
+if TYPE_CHECKING:
+  from pymol.Qt import QtCore
+  from pymol.Qt import QtWidgets
+
+_AREA_NAMES = ("left", "right", "top", "bottom")
+"""The dock areas by name, in the order error messages list them."""
+
+_REGISTRY_ATTRIBUTE = "_pymol3_dock_panels"
+"""The main window's attribute that maps panel ids to their panels."""
+
+
+class DockPanel:
+  """A plugin's panel, docked in PyMOL's main window.
+
+  Only ``add_dock_panel`` makes one. Once removed, the panel cannot be
+  shown or hidden again; its id is free for a new panel.
+  """
+
+  def __init__(
+      self,
+      panel_id: str,
+      dock_widget: QtWidgets.QDockWidget,
+      window: QtWidgets.QMainWindow,
+  ) -> None:
+    """Keeps the panel's id, dock widget and window.
+
+    Args:
+      panel_id: The id the panel is registered under.
+      dock_widget: The dock widget that holds the plugin's widget.
+      window: PyMOL's main window the panel is docked in.
+    """
+    self._panel_id = panel_id
+    """The id the panel is registered under."""
+    self._dock_widget = dock_widget
+    """The dock widget that holds the plugin's widget."""
+    self._window = window
+    """PyMOL's main window the panel is docked in."""
+    self._removed = False
+    """Whether ``remove`` took the panel out of the window."""
+
+  @property
+  def panel_id(self) -> str:
+    """The id the panel is registered under."""
+    return self._panel_id
+
+  @property
+  def dock_widget(self) -> QtWidgets.QDockWidget:
+    """The dock widget that holds the plugin's widget."""
+    return self._dock_widget
+
+  def show(self) -> None:
+    """Shows the panel and raises it above panels it is tabbed with.
+
+    Raises:
+      RuntimeError: The panel was removed.
+    """
+    self._check_not_removed()
+    self._dock_widget.show()
+    self._dock_widget.raise_()
+
+  def hide(self) -> None:
+    """Hides the panel; ``show`` brings it back.
+
+    Raises:
+      RuntimeError: The panel was removed.
+    """
+    self._check_not_removed()
+    self._dock_widget.hide()
+
+  def is_visible(self) -> bool:
+    """Tells whether the panel is shown.
+
+    A panel tabbed behind another one counts as shown.
+
+    Returns:
+      False once the panel is hidden or removed, True otherwise.
+    """
+    return not self._removed and not self._dock_widget.isHidden()
+
+  def remove(self) -> None:
+    """Takes the panel out of the window and frees its id.
+
+    The dock widget and the plugin's widget in it are deleted. A second
+    call does nothing.
+    """
+    if self._removed:
+      return
+    self._removed = True
+    _registry(self._window).pop(self._panel_id, None)
+    self._window.removeDockWidget(self._dock_widget)
+    self._dock_widget.deleteLater()
+
+  def _check_not_removed(self) -> None:
+    """Refuses to touch a removed panel's deleted dock widget.
+
+    Raises:
+      RuntimeError: The panel was removed.
+    """
+    if self._removed:
+      raise RuntimeError(f"dock panel {self._panel_id!r} was removed")
+
+
+def add_dock_panel(
+    widget: QtWidgets.QWidget,
+    title: str,
+    area: str | QtCore.Qt.DockWidgetArea = "right",
+    panel_id: str | None = None,
+    floating: bool = False,
+) -> DockPanel:
+  """Docks a plugin's widget as a panel in PyMOL's main window.
+
+  Args:
+    widget: The plugin's widget; the panel takes ownership of it.
+    title: The panel's title.
+    area: ``"left"``, ``"right"``, ``"top"`` or ``"bottom"``, in any
+      letter case, or the matching ``Qt.DockWidgetArea`` member.
+    panel_id: The id to find the panel by; the title when left out.
+    floating: Whether the panel starts floating instead of docked; it
+      docks back into ``area``.
+
+  Returns:
+    The panel.
+
+  Raises:
+    pymol.plugins.QtNotAvailableError: PyMOL runs without its Qt window.
+    ValueError: The area is none of the four, or the id is in use.
+  """
+  tmp_window = pymol.gui.get_qtwindow()
+  if tmp_window is None:
+    raise _qt_not_available()
+  tmp_qt = _import_qt()
+  tmp_area = _dock_area(tmp_qt, area)
+  tmp_panel_id = title if panel_id is None else panel_id
+  tmp_panels = _registry(tmp_window)
+  if tmp_panel_id in tmp_panels:
+    raise ValueError(f"a dock panel with id {tmp_panel_id!r} exists already")
+  tmp_dock_widget = tmp_qt.QtWidgets.QDockWidget(title, tmp_window)
+  tmp_dock_widget.setObjectName(f"pymol3_panel_{tmp_panel_id}")
+  tmp_dock_widget.setWidget(widget)
+  tmp_window.addDockWidget(tmp_area, tmp_dock_widget)
+  if floating:
+    tmp_dock_widget.setFloating(True)
+  tmp_panel = DockPanel(tmp_panel_id, tmp_dock_widget, tmp_window)
+  tmp_panels[tmp_panel_id] = tmp_panel
+  return tmp_panel
+
+
+def get_dock_panel(panel_id: str) -> DockPanel | None:
+  """Finds a panel that ``add_dock_panel`` added and that is not removed.
+
+  Args:
+    panel_id: The panel's id.
+
+  Returns:
+    The panel, or None when no panel has the id or PyMOL has no Qt window.
+  """
+  tmp_window = pymol.gui.get_qtwindow()
+  if tmp_window is None:
+    return None
+  return _registry(tmp_window).get(panel_id)
+
+
+def _registry(window: QtWidgets.QMainWindow) -> dict[str, DockPanel]:
+  """Returns the window's map of panel ids to panels, made on first use.
+
+  Args:
+    window: PyMOL's main window.
+
+  Returns:
+    The map, kept on the window so that each window has its own.
+  """
+  tmp_panels = getattr(window, _REGISTRY_ATTRIBUTE, None)
+  if tmp_panels is None:
+    tmp_panels = {}
+    setattr(window, _REGISTRY_ATTRIBUTE, tmp_panels)
+  return tmp_panels
+
+
+def _dock_area(qt, area) -> QtCore.Qt.DockWidgetArea:
+  """Turns an area name or Qt member into one of the four dock areas.
+
+  Args:
+    qt: The ``pymol.Qt`` module.
+    area: The area as the plugin passed it.
+
+  Returns:
+    The ``Qt.DockWidgetArea`` member.
+
+  Raises:
+    ValueError: The area is none of the four.
+  """
+  tmp_enum = qt.QtCore.Qt.DockWidgetArea
+  tmp_areas = {
+      "left": tmp_enum.LeftDockWidgetArea,
+      "right": tmp_enum.RightDockWidgetArea,
+      "top": tmp_enum.TopDockWidgetArea,
+      "bottom": tmp_enum.BottomDockWidgetArea,
+  }
+  if isinstance(area, str):
+    tmp_area = tmp_areas.get(area.lower())
+  else:
+    tmp_area = next(
+        (tmp_member for tmp_member in tmp_areas.values() if tmp_member == area),
+        None,
+    )
+  if tmp_area is None:
+    tmp_names = ", ".join(repr(tmp_name) for tmp_name in _AREA_NAMES)
+    raise ValueError(f"unknown dock area {area!r}; use one of {tmp_names}")
+  return tmp_area
+
+
+def _import_qt():
+  """Imports the Qt binding PyMOL uses.
+
+  Returns:
+    The ``pymol.Qt`` module.
+
+  Raises:
+    pymol.plugins.QtNotAvailableError: No Qt binding is installed.
+  """
+  try:
+    return importlib.import_module("pymol.Qt")
+  except ImportError as exception:
+    raise _qt_not_available() from exception
+
+
+def _qt_not_available() -> Exception:
+  """Makes the error PyMOL raises when its Qt GUI is missing.
+
+  ``pymol.plugins`` is imported only here, since it loads the plugin
+  system, which this module needs only to report the error.
+
+  Returns:
+    A ``pymol.plugins.QtNotAvailableError``.
+  """
+  tmp_plugins = importlib.import_module("pymol.plugins")
+  return tmp_plugins.QtNotAvailableError(
+      "dock panels need PyMOL's Qt window, which this PyMOL does not have"
+  )
