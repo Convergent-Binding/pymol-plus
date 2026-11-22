@@ -21,6 +21,12 @@ _BUNDLE = pathlib.Path(sys.argv[1]).resolve()
 _SMOKE_TEST = pathlib.Path(sys.argv[2]).resolve()
 """distribution/tests/smoke_test.py."""
 
+_LAUNCHER = sys.argv[3] if len(sys.argv) > 3 else (
+  "PyMOL-Open-Source.exe" if sys.platform == "win32" else "PyMOL-Open-Source"
+)
+"""The launcher's path in the app, such as
+Contents/MacOS/PyMOL-Open-Source in the macOS app bundle."""
+
 _WINDOWS = sys.platform == "win32"
 """Whether the test runs on Windows."""
 
@@ -92,13 +98,11 @@ class BundleSmokeTest(unittest.TestCase):
   def test_moved_bundle_runs_headless(self) -> None:
     """The copy prints SMOKE TEST OK and exits 0."""
     with tempfile.TemporaryDirectory() as tmp_folder:
-      tmp_app = pathlib.Path(tmp_folder, "moved", "PyMOL-Open-Source")
+      tmp_app = pathlib.Path(tmp_folder, "moved", _BUNDLE.name)
       shutil.copytree(_BUNDLE, tmp_app, symlinks=False)
       tmp_home = pathlib.Path(tmp_folder, "home")
       tmp_home.mkdir()
-      tmp_launcher = tmp_app / (
-        "PyMOL-Open-Source.exe" if _WINDOWS else "PyMOL-Open-Source"
-      )
+      tmp_launcher = tmp_app / _LAUNCHER
 
       tmp_result = subprocess.run(
         [str(tmp_launcher), "-cq", str(_SMOKE_TEST)],

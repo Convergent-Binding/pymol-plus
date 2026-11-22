@@ -88,6 +88,39 @@ APP_USER_MODEL_ID = "io.github.kullik01.pymol-open-source"
 """The app's identity on the Windows taskbar, also its shortcuts'."""
 
 
+def check_macos_bundle_executable() -> None:
+  """Inside the macOS app the process is the bundle's own executable.
+
+  The launcher runs Python in its own process there, so macOS shows the
+  app with its name and icon; a process of runtime/bin/python3 would show
+  as Python.
+  """
+  tmp_app_root = os.environ.get("PYMOL_APP_ROOT", "")
+  tmp_in_bundle = tmp_app_root.endswith("/Contents/Resources")
+  if sys.platform != "darwin" or not tmp_in_bundle:
+    return
+  tmp_executable = os.path.realpath(sys.executable)
+  assert tmp_executable.endswith("/Contents/MacOS/PyMOL-Open-Source"), (
+    f"the process runs {tmp_executable}"
+  )
+
+
+def check_macos_python_settings() -> None:
+  """The macOS launcher runs Python in UTF-8 mode, bytecode outside the app.
+
+  The app starts from the Finder without LANG, where Python would otherwise
+  read files as ASCII; bytecode written into the signed app would break its
+  signature.
+  """
+  if sys.platform != "darwin" or not os.environ.get("PYMOL_APP_ROOT"):
+    return
+  assert sys.flags.utf8_mode == 1, "Python runs without UTF-8 mode"
+  tmp_prefix = sys.pycache_prefix or ""
+  assert tmp_prefix.endswith("/Library/Caches/PyMOL-Open-Source/pycache"), (
+    f"bytecode goes to {tmp_prefix!r}"
+  )
+
+
 def check_app_user_model_id() -> None:
   """The Windows process carries the app's AppUserModelID.
 
@@ -169,6 +202,8 @@ try:
   check_bundled_modules_and_data()
   check_licenses()
   check_app_user_model_id()
+  check_macos_bundle_executable()
+  check_macos_python_settings()
   check_certificates()
   with tempfile.TemporaryDirectory() as tmp_dir:
     check_commands(tmp_dir)

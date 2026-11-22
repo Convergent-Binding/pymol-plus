@@ -9,6 +9,9 @@
  *   <root>/runtime/pythonw.exe       (Windows)
  *   <root>/runtime/bin/python3       (Linux, macOS)
  *
+ * Inside a macOS app bundle the launcher is Contents/MacOS/PyMOL-Open-Source
+ * and <root> is Contents/Resources.
+ *
  * The launcher sets PYMOL_APP_ROOT to <root> and runs the runtime as
  *
  *   python -I -m pymol.startup_wrapper <its own arguments, unchanged>
@@ -18,10 +21,13 @@
  * prints "PyMOL-Open-Source: runtime not found: <path>" to stderr and exits
  * 127.
  *
- * On Linux and macOS it replaces itself with Python (execv). On Windows it is
- * a GUI program, so no console window opens; it starts pythonw.exe with the
- * rest of its own command line verbatim (no re-quoting), hands on its
- * standard handles, so `-cq` output still reaches a pipe, and waits.
+ * On Linux it replaces itself with Python (execv). On Windows it is a GUI
+ * program, so no console window opens; it starts pythonw.exe with the rest
+ * of its own command line verbatim (no re-quoting), hands on its standard
+ * handles, so `-cq` output still reaches a pipe, and waits. On macOS it loads
+ * <root>/runtime/lib/libpython3.X.dylib and runs PyMOL in its own process,
+ * with the same isolation: macOS shows a process as an app only while its
+ * executable is the bundle's own, for the Dock icon and the app menu.
  *
  * @copyright Copyright (c) 2026, Hannah Kullik.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -144,11 +150,14 @@ int wmain(void)
 #include <unistd.h>
 
 #ifdef __APPLE__
+#include <Python.h>
+#include <dlfcn.h>
 #include <mach-o/dyld.h>
+#include <sys/stat.h>
 #endif
 
-/** Writes the launcher's real directory into root; returns 0 on success. */
-static int find_root(char root[PATH_MAX])
+/** Writes the launcher's real directory into folder; returns 0 on success. */
+static int find_launcher_folder(char folder[PATH_MAX])
 {
   char path[PATH_MAX];
 #ifdef __APPLE__
@@ -163,10 +172,10 @@ static int find_root(char root[PATH_MAX])
   }
   path[length] = '\0';
 #endif
-  if(realpath(path, root) == NULL) {
+  if(realpath(path, folder) == NULL) {
     return -1;
   }
-  char* separator = strrchr(root, '/');
+  char* separator = strrchr(folder, '/');
   if(separator == NULL) {
     return -1;
   }
@@ -174,10 +183,170 @@ static int find_root(char root[PATH_MAX])
   return 0;
 }
 
+#ifdef __APPLE__
+
+/** The CPython functions the macOS launcher looks up in libpython. */
+typedef struct {
+  void (*init_isolated_pre_config)(PyPreConfig*);
+  PyStatus (*pre_initialize)(const PyPreConfig*);
+  void (*init_isolated_config)(PyConfig*);
+  PyStatus (*set_string)(PyConfig*, wchar_t**, const wchar_t*);
+  PyStatus (*set_bytes_argv)(PyConfig*, Py_ssize_t, char* const*);
+  PyStatus (*initialize_from_config)(const PyConfig*);
+  int (*status_exception)(PyStatus);
+  void (*exit_status_exception)(PyStatus);
+  void (*config_clear)(PyConfig*);
+  int (*run_main)(void);
+  wchar_t* (*decode_locale)(const char*, size_t*);
+} python_api;
+
+/**
+ * Finds the app root: Contents/Resources when the launcher sits in an app
+ * bundle's Contents/MacOS, else the launcher's own folder.
+ *
+ * @param folder The launcher's real folder.
+ * @param root Receives the app root.
+ * @return 0 on success.
+ */
+static int find_root(const char* folder, char root[PATH_MAX])
+{
+  char resources[PATH_MAX + 32];
+  snprintf(resources, sizeof(resources), "%s/../Resources/runtime", folder);
+  struct stat info;
+  if(stat(resources, &info) == 0 && S_ISDIR(info.st_mode)) {
+    snprintf(resources, sizeof(resources), "%s/../Resources", folder);
+    return realpath(resources, root) == NULL ? -1 : 0;
+  }
+  snprintf(root, PATH_MAX, "%s", folder);
+  return 0;
+}
+
+/**
+ * Looks up the CPython functions the launcher calls.
+ *
+ * @param library The loaded libpython.
+ * @param api Receives the functions.
+ * @return 0 when every function was found.
+ */
+static int load_python_api(void* library, python_api* api)
+{
+  api->init_isolated_pre_config =
+      dlsym(library, "PyPreConfig_InitIsolatedConfig");
+  api->pre_initialize = dlsym(library, "Py_PreInitialize");
+  api->init_isolated_config = dlsym(library, "PyConfig_InitIsolatedConfig");
+  api->set_string = dlsym(library, "PyConfig_SetString");
+  api->set_bytes_argv = dlsym(library, "PyConfig_SetBytesArgv");
+  api->initialize_from_config = dlsym(library, "Py_InitializeFromConfig");
+  api->status_exception = dlsym(library, "PyStatus_Exception");
+  api->exit_status_exception = dlsym(library, "Py_ExitStatusException");
+  api->config_clear = dlsym(library, "PyConfig_Clear");
+  api->run_main = dlsym(library, "Py_RunMain");
+  api->decode_locale = dlsym(library, "Py_DecodeLocale");
+  return api->init_isolated_pre_config && api->pre_initialize &&
+                 api->init_isolated_config && api->set_string &&
+                 api->set_bytes_argv && api->initialize_from_config &&
+                 api->status_exception && api->exit_status_exception &&
+                 api->config_clear && api->run_main && api->decode_locale
+             ? 0
+             : -1;
+}
+
+/**
+ * Runs PyMOL in this process with the runtime under root.
+ *
+ * Like `python -I`: isolated from PYTHON* variables and the user's
+ * site-packages, in UTF-8 mode, which an isolated pre-configuration leaves
+ * off; an app started from the Finder has no LANG and would read files as
+ * ASCII without it. Bytecode goes to ~/Library/Caches/PyMOL-Open-Source, as
+ * writing into the signed app would break its signature.
+ *
+ * @param api The CPython functions.
+ * @param root The app root.
+ * @param argc The launcher's argument count.
+ * @param argv The launcher's arguments, which become sys.argv.
+ * @return Python's exit code.
+ */
+static int run_python(const python_api* api, const char* root, int argc,
+                      char** argv)
+{
+  PyPreConfig pre_config;
+  api->init_isolated_pre_config(&pre_config);
+  pre_config.utf8_mode = 1;
+  PyStatus status = api->pre_initialize(&pre_config);
+  if(api->status_exception(status)) {
+    api->exit_status_exception(status);
+  }
+  char home[PATH_MAX + 16];
+  snprintf(home, sizeof(home), "%s/runtime", root);
+  const char* user_home = getenv("HOME");
+  char cache[PATH_MAX + 64];
+  snprintf(cache, sizeof(cache), "%s/Library/Caches/PyMOL-Open-Source/pycache",
+           user_home ? user_home : "/tmp");
+
+  wchar_t* wide_home = api->decode_locale(home, NULL);
+  wchar_t* wide_cache = api->decode_locale(cache, NULL);
+  if(wide_home == NULL || wide_cache == NULL) {
+    fprintf(stderr, "PyMOL-Open-Source: cannot decode %s or %s\n", home, cache);
+    return RUNTIME_NOT_FOUND;
+  }
+  PyConfig config;
+  api->init_isolated_config(&config);
+  /** Like the python command: Ctrl+C and the C streams behave as usual. */
+  config.install_signal_handlers = 1;
+  config.configure_c_stdio = 1;
+  config.parse_argv = 0;
+  status = api->set_string(&config, &config.home, wide_home);
+  if(!api->status_exception(status)) {
+    status = api->set_string(&config, &config.pycache_prefix, wide_cache);
+  }
+  if(!api->status_exception(status)) {
+    status =
+        api->set_string(&config, &config.run_module, L"pymol.startup_wrapper");
+  }
+  if(!api->status_exception(status)) {
+    status = api->set_bytes_argv(&config, argc, argv);
+  }
+  if(!api->status_exception(status)) {
+    status = api->initialize_from_config(&config);
+  }
+  api->config_clear(&config);
+  if(api->status_exception(status)) {
+    api->exit_status_exception(status);
+  }
+  return api->run_main();
+}
+
+int main(int argc, char** argv)
+{
+  char folder[PATH_MAX];
+  char root[PATH_MAX];
+  if(find_launcher_folder(folder) != 0 || find_root(folder, root) != 0) {
+    fprintf(
+        stderr,
+        "PyMOL-Open-Source: runtime not found: cannot locate the launcher\n");
+    return RUNTIME_NOT_FOUND;
+  }
+  char library_path[PATH_MAX + 64];
+  snprintf(library_path, sizeof(library_path),
+           "%s/runtime/lib/libpython%d.%d.dylib", root, PY_MAJOR_VERSION,
+           PY_MINOR_VERSION);
+  /** RTLD_GLOBAL: extension modules find CPython's symbols in this image. */
+  void* library = dlopen(library_path, RTLD_NOW | RTLD_GLOBAL);
+  python_api api;
+  if(library == NULL || load_python_api(library, &api) != 0) {
+    fprintf(stderr, "PyMOL-Open-Source: runtime not found: %s\n", library_path);
+    return RUNTIME_NOT_FOUND;
+  }
+  setenv("PYMOL_APP_ROOT", root, 1);
+  return run_python(&api, root, argc, argv);
+}
+
+#else
+
 int main(int argc, char** argv)
 {
   char root[PATH_MAX];
-  if(find_root(root) != 0) {
+  if(find_launcher_folder(root) != 0) {
     fprintf(
         stderr,
         "PyMOL-Open-Source: runtime not found: cannot locate the launcher\n");
@@ -206,5 +375,7 @@ int main(int argc, char** argv)
   fprintf(stderr, "PyMOL-Open-Source: cannot start %s\n", python);
   return RUNTIME_NOT_FOUND;
 }
+
+#endif
 
 #endif

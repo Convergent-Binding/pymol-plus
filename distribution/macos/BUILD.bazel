@@ -1,0 +1,143 @@
+# The macOS packages of the app: PyMOL-Open-Source.app, signed ad hoc, and
+# its DMG.
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load(":app.bzl", "macos_app")
+load(":sign_and_dmg.bzl", "macos_dmg", "macos_signed_app")
+
+# Reads Mach-O architectures and minimum macOS versions; thins universal
+# files.
+py_library(
+    name = "macho",
+    srcs = ["macho.py"],
+    imports = ["."],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+py_test(
+    name = "macho_test",
+    size = "small",
+    srcs = ["tests/macho_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":macho"],
+)
+
+py_library(
+    name = "make_app_lib",
+    srcs = ["make_app.py"],
+    imports = ["."],
+    deps = [":macho"],
+)
+
+py_test(
+    name = "make_app_test",
+    size = "small",
+    srcs = ["tests/make_app_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [
+        ":macho",
+        ":make_app_lib",
+    ],
+)
+
+py_binary(
+    name = "make_app",
+    srcs = ["make_app.py"],
+    python_version = "3.13",
+    deps = [":macho"],
+)
+
+config_setting(
+    name = "arm64",
+    constraint_values = [
+        "@platforms//os:macos",
+        "@platforms//cpu:aarch64",
+    ],
+)
+
+_ARCH = select({
+    ":arm64": "arm64",
+    "//conditions:default": "x86_64",
+})
+
+# PyMOL-Open-Source.app for this Mac's architecture, not yet signed.
+macos_app(
+    name = "app",
+    app = "//distribution/bundle",
+    arch = _ARCH,
+    icon = "//distribution:os_specific/macos/icon.icns",
+    info_plist = "//distribution:os_specific/macos/Info.plist",
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# Every binary in the app has only this architecture and runs on macOS 12.
+py_test(
+    name = "app_checks_test",
+    size = "small",
+    srcs = ["tests/app_checks_test.py"],
+    args = ["$(rootpath :app)"] + select({
+        ":arm64": ["arm64"],
+        "//conditions:default": ["x86_64"],
+    }),
+    data = [":app"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    target_compatible_with = ["@platforms//os:macos"],
+    deps = [":macho"],
+)
+
+py_binary(
+    name = "sign_app",
+    srcs = ["sign_app.py"],
+    python_version = "3.13",
+)
+
+py_library(
+    name = "make_dmg_lib",
+    srcs = ["make_dmg.py"],
+    imports = ["."],
+    deps = [":macho"],
+)
+
+py_test(
+    name = "make_dmg_test",
+    size = "small",
+    srcs = ["tests/make_dmg_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":make_dmg_lib"],
+)
+
+py_binary(
+    name = "make_dmg",
+    srcs = ["make_dmg.py"],
+    python_version = "3.13",
+    deps = [":macho"],
+)
+
+# The app signed ad hoc, so Gatekeeper does not call the download damaged.
+macos_signed_app(
+    name = "signed_app",
+    app = ":app",
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# PyMOL-Open-Source_v<version>_macOS_<AppleSilicon|Intel>.dmg. Manual: it
+# mounts disk images with hdiutil.
+macos_dmg(
+    name = "dmg",
+    app = ":signed_app",
+    background = "//distribution:os_specific/macos/dmg/dmg_background.svg",
+    create_dmg = "@create_dmg//:create-dmg",
+    create_dmg_files = ["@create_dmg//:files"],
+    label_name = select({
+        ":arm64": "AppleSilicon",
+        "//conditions:default": "Intel",
+    }),
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:macos"],
+)

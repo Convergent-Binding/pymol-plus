@@ -20,3 +20,22 @@ py_test(
     ],
     main = "//distribution/bundle:tests/run_bundle_smoke_test.py",
 )
+
+# macOS: the signed PyMOL-Open-Source.app, moved to a new folder, passes
+# smoke_test.py headless as its own process.
+py_test(
+    name = "app_smoke_test",
+    size = "medium",
+    srcs = ["//distribution/bundle:tests/run_bundle_smoke_test.py"],
+    args = [
+        "$(rootpath //distribution/macos:signed_app)",
+        "$(rootpath :smoke_test.py)",
+        "Contents/MacOS/PyMOL-Open-Source",
+    ],
+    data = [
+        ":smoke_test.py",
+        "//distribution/macos:signed_app",
+    ],
+    main = "//distribution/bundle:tests/run_bundle_smoke_test.py",
+    target_compatible_with = ["@platforms//os:macos"],
+)
