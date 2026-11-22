@@ -22,10 +22,8 @@ on:
     # release; plain v* tags belong to the PyMOL wheel (wheels.yaml)
     tags:
       - 'setup-v*'
-    # Branch pushes only build when the app changed (GitHub ignores paths for tags)
-    paths:
-      - 'distribution/**'
-      - '.github/workflows/build_app.yaml'
+    # No paths filter: the app bundles the PyMOL built from this repository, so nearly
+    # every change can reach it
   # No paths filter: the 'release' check must exist on every pull request; the
   # 'changes' job below skips the builds when the app is not affected
   pull_request:
@@ -52,9 +50,11 @@ env:
   PYMOL_SMOKE_TEST_ONLINE: "1"
 
 jobs:
-  # ----- Which parts a change affects: a pull request that only changes text files
-  # (README, Dependabot and release-notes settings) or files outside
-  # distribution/ (the PyMOL wheel) skips the app builds.
+  # ----- Which parts a change affects: a pull request that only changes files that do
+  # not reach the app (READMEs, AGENTS.md, the wheel's docs and tests, the upstream test
+  # suite, Dependabot and release-notes settings, issue templates, the wheel's own
+  # workflows) skips the app builds. Everything else can reach the app, which bundles the
+  # PyMOL Bazel builds from this repository.
   # Pushes to production and version tags always build everything.
   changes:
     runs-on: ubuntu-latest
@@ -69,13 +69,12 @@ jobs:
       - name: Check whether the app has to be built
         id: filter
         env:
-          APP_FILES: '^(distribution/|\.github/workflows/build_app\.yaml$)'
-          TEXT_ONLY: '^distribution/README\.md$'
+          NOT_APP: '^(README\.md|AGENTS\.md|distribution/README\.md|\.mailmap|(docs|tests|testing|\.opp|\.codegraph)/.*|\.github/(ISSUE_TEMPLATE/.*|dependabot\.yml|release\.yml|workflows/(wheels|bazel)\.yaml))$'
         run: |
           BUILD=true
           # The checked-out merge commit's first parent is the base branch
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] \
-            && ! git diff --name-only HEAD^1 HEAD | grep -E "$APP_FILES" | grep -qvE "$TEXT_ONLY"; then
+            && ! git diff --name-only HEAD^1 HEAD | grep -qvE "$NOT_APP"; then
             BUILD=false
           fi
           echo "build=${BUILD}" | tee -a "$GITHUB_OUTPUT"
@@ -134,22 +133,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Python
-        uses: actions/setup-python@v7
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          python-version-file: 'distribution/.python-version'
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Extract project and Python version
-        run: |
-          echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
-          echo "PYTHON_VERSION=$(cat .python-version)" >> "$GITHUB_ENV"
-
-      - name: Create virtual environment
-        shell: cmd
-        run: win_automator.bat setup
+      - name: Extract project version
+        run: echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
 
       - name: Install Inno Setup
         shell: pwsh
@@ -160,42 +151,44 @@ jobs:
           if ($hash -ne '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0') { throw "Unexpected SHA-256 of the Inno Setup installer: $hash" }
           Start-Process -FilePath "$env:RUNNER_TEMP\innosetup.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/ALLUSERS' -Wait
 
-      - name: Cache the Microsoft C++ runtime
-        # cx_Freeze downloads it from Microsoft once; the cache keeps builds reproducible.
-        # Change the key to take a newer runtime.
-        uses: actions/cache@v6
-        with:
-          path: ~\AppData\Roaming\cxfreeze\vc_redist
-          key: msvc-runtime-17-v1
+      - name: Build the app, the portable ZIP and the installer
+        # The app bundles the Microsoft C++ runtime, which Bazel fetches pinned
+        timeout-minutes: 45
+        run: bazel build //distribution/bundle //distribution/windows:portable_zip //distribution/windows:installer
 
-      - name: Build frozen application
-        # Also downloads the Microsoft C++ runtime (if not cached), which is bundled into the app
-        timeout-minutes: 30
-        shell: cmd
-        run: win_automator.bat build app
+      - name: Test the app with Bazel
+        # Also checks that every C++ runtime DLL the binaries import is bundled
+        # (//distribution/bundle:msvc_runtime_test) and runs a moved copy headless
+        timeout-minutes: 15
+        run: bazel test //distribution/... --test_output=errors
 
-      - name: Check the bundled C++ runtime
-        run: .venv/Scripts/python tests/check_msvc_runtime.py "dist/exe.win-amd64-${PYTHON_VERSION}"
+      - name: Collect the app and the packages
+        # Bazel's output paths are relative to the repository root
+        run: |
+          ROOT="$(git rev-parse --show-toplevel)"
+          mkdir -p os_specific/dist
+          for TARGET in //distribution/windows:portable_zip //distribution/windows:installer; do
+            cp "$ROOT/$(bazel cquery --output=files "$TARGET")" os_specific/dist/
+          done
+          APP_DIR="$(cygpath -u "$RUNNER_TEMP")/app"
+          cp -r "$ROOT/$(bazel cquery --output=files //distribution/bundle)" "$APP_DIR"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+          ls -l os_specific/dist
 
       - name: Smoke test
         timeout-minutes: 5
-        shell: cmd
-        run: win_automator.bat test
+        run: tests/run_smoke_test.sh "$APP_DIR/PyMOL-Open-Source.exe"
 
       - name: GUI smoke test
         timeout-minutes: 5
         # The runner has no GPU (only OpenGL 1.1). Test a copy of the app with the bundled
-        # software OpenGL (Mesa) as opengl32.dll, like the troubleshooting note on the website;
-        # the copy keeps the DLL out of the installer and the ZIP.
+        # software OpenGL (Mesa) as opengl32.dll beside pythonw.exe, like the troubleshooting
+        # note on the website; the copy keeps the DLL out of the installer and the ZIP.
         run: |
           GUI_TEST_DIR="$(cygpath -u "$RUNNER_TEMP")/gui-test"
-          cp -r "dist/exe.win-amd64-${PYTHON_VERSION}" "$GUI_TEST_DIR"
-          cp "$GUI_TEST_DIR/opengl32sw.dll" "$GUI_TEST_DIR/opengl32.dll"
+          cp -r "$APP_DIR" "$GUI_TEST_DIR"
+          cp "$GUI_TEST_DIR/runtime/opengl32sw.dll" "$GUI_TEST_DIR/runtime/opengl32.dll"
           tests/run_smoke_test.sh --gui "$GUI_TEST_DIR/PyMOL-Open-Source.exe"
-
-      - name: Build installer
-        shell: cmd
-        run: win_automator.bat build packages
 
       - name: Download the latest published release (update test)
         env:
@@ -269,9 +262,6 @@ jobs:
           if (Test-Path $env:UNINSTALL_KEY) { throw "Uninstall entry left" }
           if (Test-Path 'HKCU:\Software\Classes\OpenSourcePyMOL.File') { throw "File type registration left" }
           if ((Get-ItemProperty 'HKCU:\Software\Classes\.pse' -ErrorAction SilentlyContinue).'(default)' -eq 'OpenSourcePyMOL.File') { throw ".pse association left" }
-
-      - name: Create portable archive
-        run: 7z a -tzip -bso0 -bsp0 "os_specific/dist/PyMOL-Open-Source_v${PROJECT_VERSION}_x64_portable.zip" "./dist/exe.win-amd64-${PYTHON_VERSION}/*"
 
       - name: Test portable archive
         timeout-minutes: 5

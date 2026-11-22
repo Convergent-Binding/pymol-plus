@@ -53,6 +53,8 @@ The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exa
 for all three platforms.
 
 ### Prerequisites
+- Windows: [Bazelisk](https://github.com/bazelbuild/bazelisk) and a C++ compiler, as for the
+  wheel (see the README at the repository root)
 - [uv](https://docs.astral.sh/uv/getting-started/installation/); it also installs the Python of `.python-version` if needed
 - Windows: [Inno Setup 7](https://jrsoftware.org/isinfo.php) (default install location or `ISCC.exe` on the `PATH`)
 - Linux (**only** for building the .deb/.rpm packages): [fpm](https://fpm.readthedocs.io/) and `rpmbuild`
@@ -60,8 +62,17 @@ for all three platforms.
   - Fedora: `sudo dnf install ruby rpm-build && sudo gem install fpm`
 - macOS (**only** for building the DMG): [create-dmg](https://github.com/create-dmg/create-dmg) (`brew install create-dmg`)
 
-### Step-by-step guide
-On Windows, use `.\win_automator.bat` instead of `./automator.sh`.
+### Windows
+Bazel builds the app and its packages; run from anywhere in the repository:
+```shell
+bazel build //distribution/windows:portable_zip //distribution/windows:installer
+bazel test //distribution/...
+```
+The app folder is `//distribution/bundle`; `bazel cquery --output=files <target>` prints where
+each output is. The installer needs Inno Setup 7 (see the prerequisites).
+
+### macOS and Linux (step-by-step guide)
+These platforms still build with cx_Freeze until their Bazel builds follow.
 1. Create the virtual environment `.venv` with all dependencies (`requirements.txt`, one file
    for all platforms). Run it again after the requirements changed:
    ```shell
