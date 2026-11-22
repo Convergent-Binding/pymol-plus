@@ -1,5 +1,5 @@
-# Tests of the Bazel-built app; the shell scripts here also test the
-# cx_Freeze app and the installed packages in build_app.yaml.
+# Tests of the app; the shell scripts here also test the installed
+# packages in build_app.yaml.
 
 load("@rules_python//python:defs.bzl", "py_test")
 

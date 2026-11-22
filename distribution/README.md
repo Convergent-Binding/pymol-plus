@@ -34,11 +34,13 @@ Please note that the files provided here are **unofficial**. They are informal, 
 ## Contents of this repository
 | Folder | Content |
 |--------|---------|
-| `automations/` | Build commands (`./automator.sh build app`, `.\win_automator.bat build packages`) |
-| `os_specific/` | cx_Freeze configuration and packaging per platform (Inno Setup, DMG, .deb/.rpm/.tar.gz) |
+| `bundle/`, `launcher/` | The app folder: Python runtime, packages, PyMOL and the native launcher (Bazel) |
+| `windows/`, `macos/`, `linux/` | The packages per platform: installer and ZIP, app and DMG, .tar.gz/.deb/.rpm (Bazel) |
+| `os_specific/` | Per-platform files of the packages: icons, splash screens, Inno Setup script, DMG background, desktop and AppStream files |
+| `checks/` | The quick checks (`bazel run //distribution:checks`) |
 | `edited/` | PyMOL files changed for this setup (marked `BEGIN EDITED CODE SEGMENT`) and the start script |
 | `licenses/` | License texts shipped with every package |
-| `tests/` | Smoke tests of the frozen app and checks of the packages |
+| `tests/` | Smoke tests of the app and checks of the packages |
 | `docs/website/` | The [website](https://kullik01.github.io/pymol-open-source-setup/) (MkDocs) |
 
 The version of the packages (e.g. 3.2.0.3+1) is the version of the PyMOL wheel plus a build number of
@@ -54,7 +56,6 @@ The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exa
 ### Prerequisites
 - [Bazelisk](https://github.com/bazelbuild/bazelisk) and a C++ compiler, as for the wheel (see the
   README at the repository root)
-- For the quick checks: [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Windows: [Inno Setup 7](https://jrsoftware.org/isinfo.php) (default install location or `ISCC.exe` on the `PATH`)
 - Linux (**only** for the .rpm): `rpmbuild` (`rpm-build` on Fedora and RHEL, `rpm` on
   Debian/Ubuntu). Release packages are built in the `quay.io/pypa/manylinux_2_28_x86_64`
@@ -86,9 +87,6 @@ bazel test //distribution/...
 The packages install on eight distributions in CI
 (`tests/test_linux_package.sh <package>` in a container, as root).
 
-The cx_Freeze build (`automator.sh`, `requirements.txt`) is no longer used and goes with
-the cleanup of the Bazel migration.
-
 ### Quick checks
 The CI job "checks" lints the app's Python code (ruff) and shell scripts (shellcheck) and
 the repository's GitHub workflows (actionlint). Run the same checks locally, with the tools
@@ -113,12 +111,13 @@ Dependabot opens weekly, grouped pull requests for the Python packages (the chec
 included) and the GitHub Actions, with versions that are at least 14 days old. Every update
 waits for a review and is merged by hand, like any other pull request.
 Deliberate limits:
-- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request,
-  because the files in `edited/` must be ported to the new version first (the build stops
-  until `EDITED_FOR_PYMOL_WHL_VERSION` in `automations/build_exe.py` matches).
 - **PySide6/shiboken6** stay at 6.9: 6.10 and newer need macOS 13 and glibc 2.34, which
   would drop macOS 12 and RHEL/AlmaLinux 8.
 - **biopython** stays at 1.86: newer versions have no Python 3.13 wheels for Intel Macs.
+
+Dependabot does not update PyMOL itself: the app bundles the wheel built from this
+repository. When a PyMOL file that `edited/` replaces changes in `modules/`,
+`//distribution/edited:edited_base_test` fails until the edits are ported.
 
 ## Releasing a new version
 The version in [pyproject.toml](pyproject.toml) is the only place to change. The build,

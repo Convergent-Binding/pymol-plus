@@ -71,8 +71,8 @@ distribution/README.md.
   `pyproject.toml`. A tag `setup-v<version>` builds a draft app release; the website is published
   only when a release is published.
 - `distribution/edited/` holds upstream PyMOL files with marked edits (`BEGIN EDITED CODE SEGMENT`);
-  a new PyMOL wheel needs them ported (`EDITED_FOR_PYMOL_WHL_VERSION` in
-  `distribution/automations/build_exe.py`).
+  when a `modules/` original changes, `//distribution/edited:edited_base_test` fails until the
+  edits are ported and `distribution/edited/upstream.sha256` is updated.
 
 **Decisions (keep them unless Hannah decides otherwise):**
 - App: PySide6 stays at 6.9 (6.10+ drops macOS 12 and RHEL/AlmaLinux 8); Python 3.13; biopython 1.86.

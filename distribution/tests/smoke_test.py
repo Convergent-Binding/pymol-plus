@@ -1,6 +1,6 @@
-"""Smoke test for a frozen PyMOL-Open-Source application.
+"""Smoke test for the PyMOL-Open-Source application.
 
-Run it with the frozen executable, use tests/run_smoke_test.sh:
+Run it with the app's launcher, use tests/run_smoke_test.sh:
   headless:          tests/run_smoke_test.sh <executable>
   with the Qt GUI:   tests/run_smoke_test.sh --gui <executable>   (needs a display, e.g. Xvfb)
 

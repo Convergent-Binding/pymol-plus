@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Runs tests/smoke_test.py with a frozen PyMOL-Open-Source executable.
+# Runs tests/smoke_test.py with a PyMOL-Open-Source launcher.
 # Usage: tests/run_smoke_test.sh [--gui] <path to executable>
 #   --gui  start the Qt GUI as well (needs a display, e.g. Xvfb); default is headless
 set -uo pipefail

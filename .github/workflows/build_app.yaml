@@ -43,9 +43,6 @@ defaults:
     working-directory: distribution
 
 env:
-  # More robust against temporary network problems with PyPI
-  # uv (./automator.sh setup) uses the Python of actions/setup-python, which gets bundled into the app
-  UV_PYTHON_PREFERENCE: only-system
   # The smoke tests also download a structure from the PDB (HTTPS)
   PYMOL_SMOKE_TEST_ONLINE: "1"
 
@@ -547,7 +544,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: 'distribution/.python-version'
+          python-version: '3.13'
           cache: 'pip'
           cache-dependency-path: 'distribution/docs/website/requirements.txt'
 

@@ -17,14 +17,12 @@ CA_BUNDLE_FILEPATHS = {
 def _use_system_ca_certificates() -> None:
   """Lets HTTPS (e.g. fetching structures from the PDB) use the system's certificates.
 
-  The OpenSSL bundled by cx_Freeze on Linux looks for certificates in paths of
-  its build environment that exist on no real system, so every HTTPS
-  connection fails with CERTIFICATE_VERIFY_FAILED. On macOS the frozen app has
-  the same problem. Windows uses the Windows certificate store instead.
+  The OpenSSL of the bundled Python runtime looks for certificates in paths
+  of its build environment that exist on no real system, so on Linux and
+  macOS every HTTPS connection fails with CERTIFICATE_VERIFY_FAILED. Windows
+  uses the Windows certificate store instead.
 
   Nothing is changed if the user already set SSL_CERT_FILE or SSL_CERT_DIR.
-  Must run before ssl is imported: cx_Freeze's ssl hook then keeps this file
-  instead of the certificate file it copied from the build machine.
   """
   if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
     return
