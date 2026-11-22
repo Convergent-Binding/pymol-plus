@@ -1,6 +1,9 @@
 load("@rules_python//python/uv:lock.bzl", "lock")
 
-exports_files(["requirements_lock.txt"])
+exports_files([
+    "build_requirements_lock.txt",
+    "requirements_lock.txt",
+])
 
 # The app's own files that //distribution/bundle puts into the app.
 exports_files(
@@ -30,6 +33,19 @@ lock(
     name = "requirements",
     srcs = ["requirements.in"],
     out = "requirements_lock.txt",
+    args = [
+        "--universal",
+        "--python-version",
+        "3.13",
+    ],
+    python_version = "3.13",
+)
+
+# Locks build_requirements.in, the Python packages the app's build runs.
+lock(
+    name = "build_requirements",
+    srcs = ["build_requirements.in"],
+    out = "build_requirements_lock.txt",
     args = [
         "--universal",
         "--python-version",

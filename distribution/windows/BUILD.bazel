@@ -1,12 +1,51 @@
 # The Windows packages of the app: the C++ runtime it bundles, the portable
 # ZIP and the Inno Setup installer.
 
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load(":msvc_runtime.bzl", "msvc_runtime")
 
 # Reads PE import tables, for the tests that check the bundled runtimes.
 py_library(
     name = "pe_imports",
     srcs = ["pe_imports.py"],
     imports = ["."],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+py_binary(
+    name = "unpack_vc_redist",
+    srcs = ["unpack_vc_redist.py"],
+    python_version = "3.13",
+    deps = [
+        "@app_build_pip//cabarchive",
+        "@app_build_pip//filelock",
+        "@app_build_pip//freeze_core",
+        "@app_build_pip//lief",
+        "@app_build_pip//striprtf",
+    ],
+)
+
+# The Microsoft C++ and OpenMP runtime DLLs and their license, which the
+# Windows app bundles (//distribution/bundle).
+msvc_runtime(
+    name = "msvc_runtime",
+    target_compatible_with = ["@platforms//os:windows"],
+    vc_redist = "@vc_redist//file",
+    visibility = ["//distribution:__subpackages__"],
+)
+
+filegroup(
+    name = "msvc_runtime_dlls",
+    srcs = [":msvc_runtime"],
+    output_group = "dlls",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+filegroup(
+    name = "msvc_runtime_license",
+    srcs = [":msvc_runtime"],
+    output_group = "license",
+    target_compatible_with = ["@platforms//os:windows"],
     visibility = ["//distribution:__subpackages__"],
 )

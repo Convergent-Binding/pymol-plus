@@ -334,6 +334,48 @@ class AssembleBundleTest(unittest.TestCase):
       ).exists()
     )
 
+  def test_runtime_and_license_trees(self) -> None:
+    """Extra runtime files and license folders land where Windows needs them.
+
+    The C++ runtime goes beside the interpreter, its license into its own
+    folder of licenses/, and a file of site-packages can be copied into the
+    runtime folder too (Qt's software OpenGL beside pythonw.exe).
+    """
+    tmp_dlls = self.root / "msvc" / "dlls"
+    _write(tmp_dlls / "msvcp140.dll", "dll")
+    tmp_license = self.root / "msvc" / "license"
+    _write(tmp_license / "LICENSE.txt", "eula")
+    _write(self.site_packages / "PySide6" / "opengl32sw.dll", "mesa")
+    tmp_out = self.root / "out"
+
+    tmp_status, tmp_stderr = self._assemble(
+      tmp_out,
+      "--runtime-tree",
+      str(tmp_dlls),
+      "--license-tree",
+      f"{tmp_license}=vc_redist",
+      "--runtime-from-site-packages",
+      "PySide6/opengl32sw.dll=opengl32sw.dll",
+    )
+
+    self.assertEqual(tmp_status, 0, tmp_stderr)
+    tmp_runtime = tmp_out / "runtime"
+    self.assertTrue((tmp_runtime / "msvcp140.dll").is_file())
+    self.assertTrue((tmp_runtime / "opengl32sw.dll").is_file())
+    tmp_vc_license = tmp_out / "licenses" / "vc_redist" / "LICENSE.txt"
+    self.assertEqual(tmp_vc_license.read_text(encoding="utf-8"), "eula")
+
+  def test_missing_site_packages_file_fails(self) -> None:
+    """Copying a file that site-packages lacks stops the build, naming it."""
+    tmp_status, tmp_stderr = self._assemble(
+      self.root / "out",
+      "--runtime-from-site-packages",
+      "PySide6/opengl32sw.dll=opengl32sw.dll",
+    )
+
+    self.assertNotEqual(tmp_status, 0)
+    self.assertIn("PySide6/opengl32sw.dll", tmp_stderr)
+
   def test_no_symlinks(self) -> None:
     """The app holds no symlinks, though the runtime's bin/python3 is one."""
     tmp_out = self.root / "out"

@@ -73,10 +73,13 @@ def check_licenses() -> None:
                    "LGPL-3.0.txt", "PySide6_Essentials/LGPL-3.0.txt", "Python/LICENSE.txt"):
     tmp_text = tmp_licenses_dir / tmp_name
     assert tmp_text.is_file(), f"license file missing: {tmp_name}"
-  # Only the cx_Freeze app bundles the C++ runtime so far; the Bazel-built
-  # app does not yet.
-  if sys.platform == "win32" and not tmp_app_root:
-    tmp_vc_redist = tmp_exe_dir / "share" / "licenses" / "vc_redist"
+  # The Windows app bundles the Microsoft C++ runtime with its license: the
+  # Bazel-built app in licenses/, the cx_Freeze app in share/licenses/.
+  if sys.platform == "win32":
+    if tmp_app_root:
+      tmp_vc_redist = tmp_licenses_dir / "vc_redist"
+    else:
+      tmp_vc_redist = tmp_exe_dir / "share" / "licenses" / "vc_redist"
     assert tmp_vc_redist.is_dir(), "license of the C++ runtime missing"
 
 

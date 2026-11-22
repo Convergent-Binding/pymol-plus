@@ -37,6 +37,13 @@ def _app_bundle_impl(ctx):
         for f in target.files.to_list():
             args.add("--overlay", "{}={}".format(f.path, destination))
     args.add("--launcher", ctx.executable.launcher)
+    for f in ctx.files.runtime_trees:
+        args.add("--runtime-tree", f.path)
+    for source, destination in ctx.attr.runtime_from_site_packages.items():
+        args.add("--runtime-from-site-packages", "{}={}".format(source, destination))
+    for target, name in ctx.attr.license_trees.items():
+        for f in target.files.to_list():
+            args.add("--license-tree", "{}={}".format(f.path, name))
     for f in ctx.files.licenses:
         args.add("--license", "{}={}".format(f.path, f.basename))
     args.add("--project-license", ctx.file.project_license)
@@ -53,7 +60,8 @@ def _app_bundle_impl(ctx):
     ctx.actions.run(
         outputs = [out],
         inputs = depset(
-            runtime_files + ctx.files.overlays + ctx.files.licenses + [
+            runtime_files + ctx.files.overlays + ctx.files.licenses +
+            ctx.files.runtime_trees + ctx.files.license_trees + [
                 ctx.file.site_packages,
                 ctx.file.wheel,
                 ctx.executable.launcher,
@@ -84,6 +92,10 @@ app_bundle = rule(
             executable = True,
             cfg = "target",
         ),
+        "license_trees": attr.label_keyed_string_dict(
+            allow_files = True,
+            doc = "Folders copied into licenses/, each into the folder named.",
+        ),
         "licenses": attr.label_list(
             allow_files = True,
             doc = "Texts copied into licenses/ under their own names; " +
@@ -111,6 +123,14 @@ app_bundle = rule(
             mandatory = True,
             allow_files = True,
             doc = "The python-build-standalone files, such as @python_3_13//:files.",
+        ),
+        "runtime_from_site_packages": attr.string_dict(
+            doc = "Files of the app's site-packages also copied into runtime/, " +
+                  "as site-packages path to runtime/ path.",
+        ),
+        "runtime_trees": attr.label_list(
+            allow_files = True,
+            doc = "Folders whose files go into runtime/, beside the interpreter.",
         ),
         "site_packages": attr.label(
             mandatory = True,

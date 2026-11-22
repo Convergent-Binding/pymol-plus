@@ -211,6 +211,28 @@ pip.parse(
 
 use_repo(pip, "app_pip")
 
+# The Python packages the app's build runs; see distribution/build_requirements.in.
+pip.parse(
+    hub_name = "app_build_pip",
+    python_version = "3.13",
+    requirements_lock = "//distribution:build_requirements_lock.txt",
+)
+
+use_repo(pip, "app_build_pip")
+
+# The Microsoft C++ and OpenMP runtimes the Windows app bundles, from the
+# Visual C++ Redistributable cx_Freeze used (https://aka.ms/vs/17/release/
+# vc_redist.x64.exe), pinned: Microsoft's permanent URL of the 2026-11-07
+# release names its SHA-256. See //distribution/windows:msvc_runtime.
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
+
+http_file(
+    name = "vc_redist",
+    downloaded_file_path = "VC_redist.x64.exe",
+    sha256 = "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
+    urls = ["https://download.visualstudio.microsoft.com/download/pr/e9604e21-4b79-4096-a4b3-1b63d4b55b4d/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe"],
+)
+
 # The uv binary //tools/bazel:requirements locks requirements_lock.txt with,
 # fetched by rules_python; the version rules_python 2.3.2 itself uses.
 uv = use_extension(

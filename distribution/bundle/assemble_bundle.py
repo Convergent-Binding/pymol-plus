@@ -378,6 +378,13 @@ def assemble(args: argparse.Namespace) -> None:
     tmp_wheel.extractall(tmp_site_packages)
   for tmp_source, tmp_destination in _pairs(args.overlay):
     _copy(tmp_source, tmp_site_packages / tmp_destination)
+  for tmp_tree in args.runtime_tree:
+    _copy_tree(pathlib.Path(tmp_tree), tmp_runtime)
+  for tmp_source, tmp_destination in _pairs(args.runtime_from_site_packages):
+    tmp_file = tmp_site_packages / tmp_source
+    if not tmp_file.is_file():
+      raise BundleError(f"site-packages holds no {tmp_source.as_posix()}.")
+    _copy(tmp_file, tmp_runtime / tmp_destination)
 
   tmp_launcher = pathlib.Path(args.launcher)
   _copy(tmp_launcher, tmp_out / tmp_launcher.name)
@@ -397,6 +404,9 @@ def assemble(args: argparse.Namespace) -> None:
     tmp_app_version,
     args.python_version,
   )
+
+  for tmp_tree, tmp_name in _pairs(args.license_tree):
+    _copy_tree(tmp_tree, tmp_out / "licenses" / tmp_name)
 
   tmp_status = _stable_status(pathlib.Path(args.status_file))
   tmp_manifest = {
@@ -433,6 +443,24 @@ def main(argv: list[str]) -> int:
     "--overlay", action="append", default=[], help="SOURCE=site-packages path"
   )
   tmp_parser.add_argument("--launcher", required=True)
+  tmp_parser.add_argument(
+    "--runtime-tree",
+    action="append",
+    default=[],
+    help="a folder whose files go into runtime/",
+  )
+  tmp_parser.add_argument(
+    "--runtime-from-site-packages",
+    action="append",
+    default=[],
+    help="site-packages path=runtime/ path, copied after the packages",
+  )
+  tmp_parser.add_argument(
+    "--license-tree",
+    action="append",
+    default=[],
+    help="FOLDER=licenses/ folder name",
+  )
   tmp_parser.add_argument(
     "--license", action="append", default=[], help="SOURCE=licenses/ name"
   )

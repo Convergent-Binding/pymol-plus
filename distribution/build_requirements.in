@@ -1,0 +1,10 @@
+# Python packages the app's build runs, locked in build_requirements_lock.txt
+# for Python 3.13 with
+#   bazel run //distribution:build_requirements.update
+# freeze-core unpacks the Microsoft C++ runtime from vc_redist.x64.exe
+# (//distribution/windows:msvc_runtime), at the versions requirements.txt pins.
+cabarchive==0.2.5
+filelock==4.2.12
+freeze-core==0.8.1
+lief==1.0.0
+striprtf==0.0.35
