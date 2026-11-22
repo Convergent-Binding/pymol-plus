@@ -47,11 +47,11 @@ class PortableZipTest(unittest.TestCase):
     with zipfile.ZipFile(_ZIP) as tmp_zip:
       tmp_names = tmp_zip.namelist()
     self.assertEqual(
-      [tmp_n for tmp_n in tmp_names if tmp_n.endswith(".pyc")], []
+      [tmp_name for tmp_name in tmp_names if tmp_name.endswith(".pyc")], []
     )
     tmp_unsafe = re.compile(r"^(/|[A-Za-z]:)|(^|/)\.\.(/|$)")
     self.assertEqual(
-      [tmp_n for tmp_n in tmp_names if tmp_unsafe.search(tmp_n)], []
+      [tmp_name for tmp_name in tmp_names if tmp_unsafe.search(tmp_name)], []
     )
 
 
