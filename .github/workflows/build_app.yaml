@@ -69,7 +69,7 @@ jobs:
       - name: Check whether the app has to be built
         id: filter
         env:
-          NOT_APP: '^(README\.md|AGENTS\.md|distribution/README\.md|\.mailmap|(docs|tests|testing|\.opp|\.codegraph)/.*|\.github/(ISSUE_TEMPLATE/.*|dependabot\.yml|release\.yml|workflows/(wheels|bazel)\.yaml))$'
+          NOT_APP: '^(README\.md|AGENTS\.md|distribution/README\.md|\.mailmap|(docs|tests|testing|\.opp|\.codegraph)/.*|\.github/(ISSUE_TEMPLATE/.*|dependabot\.yml|release\.yml|workflows/(wheels|bazel|docs)\.yaml))$'
         run: |
           BUILD=true
           # The checked-out merge commit's first parent is the base branch

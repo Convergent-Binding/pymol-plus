@@ -49,8 +49,7 @@ The GUI uses Qt 6 (PySide6 6.9) and runs natively on Wayland; `QT_QPA_PLATFORM=x
 
 ## From source
 The following information is about building a platform dependent package/setup from source.
-The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exactly these steps
-for all three platforms.
+The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exactly these steps.
 
 ### Prerequisites
 - Windows: [Bazelisk](https://github.com/bazelbuild/bazelisk) and a C++ compiler, as for the

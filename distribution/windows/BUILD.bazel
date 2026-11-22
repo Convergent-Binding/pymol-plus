@@ -2,7 +2,7 @@
 # ZIP and the Inno Setup installer.
 
 load("@app_project_metadata//:metadata.bzl", "VERSION")
-load("@inno_setup//:defs.bzl", "ISCC_FOUND")
+load("@inno_setup//:defs.bzl", "ISCC_PATH")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load(":inno_setup.bzl", "inno_setup_installer", "portable_zip")
 load(":msvc_runtime.bzl", "msvc_runtime")
@@ -91,7 +91,7 @@ py_test(
 inno_setup_installer(
     name = "installer",
     app = "//distribution/bundle",
-    iscc = "@inno_setup//:ISCC.exe" if ISCC_FOUND else None,
+    iscc_path = ISCC_PATH,
     script = "//distribution:os_specific/windows/inno_setup/setup.iss",
     script_files = [
         "//distribution:os_specific/windows/inno_setup/LICENSE.txt",
@@ -99,4 +99,21 @@ inno_setup_installer(
     ],
     tags = ["manual"],
     target_compatible_with = ["@platforms//os:windows"],
+)
+
+py_library(
+    name = "run_iscc_lib",
+    srcs = ["run_iscc.py"],
+    imports = ["."],
+)
+
+# run_iscc hands ISCC a copy of the app at a short path.
+py_test(
+    name = "run_iscc_test",
+    size = "small",
+    srcs = ["tests/run_iscc_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":run_iscc_lib"],
 )

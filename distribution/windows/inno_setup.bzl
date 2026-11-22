@@ -40,26 +40,27 @@ portable_zip = rule(
 )
 
 def _inno_setup_installer_impl(ctx):
-    if not ctx.file.iscc:
+    if not ctx.attr.iscc_path:
         fail("Inno Setup 7 (ISCC.exe) was not found. Install it from " +
              "https://jrsoftware.org/isdl.php and build again.")
     out = ctx.actions.declare_file(
         "PyMOL-Open-Source_v{}_x64_setup.exe".format(VERSION),
     )
     args = ctx.actions.args()
-    args.add("--iscc", ctx.file.iscc)
+    args.add("--iscc", ctx.attr.iscc_path)
     args.add("--script", ctx.file.script)
     args.add("--app", ctx.file.app.path)
     args.add("--version", VERSION)
     args.add("--out", out)
     ctx.actions.run(
         outputs = [out],
-        inputs = [ctx.file.iscc, ctx.file.script, ctx.file.app] + ctx.files.script_files,
+        inputs = [ctx.file.script, ctx.file.app] + ctx.files.script_files,
         executable = ctx.executable._tool,
         arguments = [args],
         mnemonic = "InnoSetup",
         progress_message = "Compiling the installer %{output}",
-        # ISCC is a program of this machine, outside Bazel's inputs.
+        # ISCC is a program of this machine, run from its install folder,
+        # outside Bazel's inputs.
         execution_requirements = {
             "local": "1",
             "no-cache": "1",
@@ -75,9 +76,9 @@ inno_setup_installer = rule(
             mandatory = True,
             doc = "The app folder, //distribution/bundle.",
         ),
-        "iscc": attr.label(
-            allow_single_file = True,
-            doc = "@inno_setup//:ISCC.exe; empty where Inno Setup is missing.",
+        "iscc_path": attr.string(
+            doc = "ISCC.exe's absolute path (@inno_setup); empty where Inno " +
+                  "Setup is missing.",
         ),
         "script": attr.label(allow_single_file = [".iss"], mandatory = True),
         "script_files": attr.label_list(

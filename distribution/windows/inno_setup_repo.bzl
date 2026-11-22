@@ -3,8 +3,11 @@
 A local repository rule that finds ISCC.exe where Inno Setup 7 installs it
 (for all users, 64- and 32-bit, or per user), then on PATH. Bazel does not
 fetch Inno Setup, whose installer documents no portable mode; CI installs a
-pinned copy. `@inno_setup//:defs.bzl` says whether it was found, so a
-machine without it can still load //distribution/windows.
+pinned copy. `@inno_setup//:defs.bzl` holds ISCC_PATH, the absolute path
+of ISCC.exe, or "" where it is missing, so such a machine can still load
+//distribution/windows. The path is used in place: ISCC loads its compiler
+DLLs and its `compiler:` files from its own folder, which a link or copy
+of ISCC.exe elsewhere would not have.
 """
 
 _INSTALL_FOLDERS = [
@@ -24,13 +27,8 @@ def _inno_setup_impl(rctx):
             break
     if found == None:
         found = rctx.which("ISCC")
-    if found == None:
-        rctx.file("BUILD.bazel", "")
-        rctx.file("defs.bzl", "ISCC_FOUND = False\n")
-        return
-    rctx.symlink(found, "ISCC.exe")
-    rctx.file("BUILD.bazel", 'exports_files(["ISCC.exe"], visibility = ["//visibility:public"])\n')
-    rctx.file("defs.bzl", "ISCC_FOUND = True\n")
+    rctx.file("BUILD.bazel", "")
+    rctx.file("defs.bzl", 'ISCC_PATH = "{}"\n'.format(str(found).replace("\\", "/") if found else ""))
 
 inno_setup = repository_rule(
     implementation = _inno_setup_impl,
