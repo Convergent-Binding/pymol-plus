@@ -27,6 +27,9 @@ _FAKE_PYTHON = pathlib.Path(sys.argv[2])
 _WINDOWS = sys.platform == "win32"
 """Whether the test runs on Windows."""
 
+_MACOS = sys.platform == "darwin"
+"""Whether the test runs on macOS, where the launcher runs Python in-process."""
+
 _LAUNCHER_NAME = "PyMOL-Open-Source.exe" if _WINDOWS else "PyMOL-Open-Source"
 """The launcher's name in an app folder."""
 
@@ -90,6 +93,7 @@ class LauncherTest(unittest.TestCase):
     """Puts fake_python where the launcher expects the runtime."""
     _copy_executable(_FAKE_PYTHON, self.root / _RUNTIME_PYTHON)
 
+  @unittest.skipIf(_MACOS, "macOS runs Python in the launcher's process")
   def test_arguments_pass_through(self) -> None:
     """Arguments reach Python unchanged, after the startup module."""
     self._with_runtime()
@@ -103,6 +107,7 @@ class LauncherTest(unittest.TestCase):
       ["-I", "-m", "pymol.startup_wrapper", "-cq", tmp_argument],
     )
 
+  @unittest.skipIf(_MACOS, "macOS runs Python in the launcher's process")
   def test_app_root_set(self) -> None:
     """PYMOL_APP_ROOT names the launcher's folder."""
     self._with_runtime()
@@ -112,6 +117,7 @@ class LauncherTest(unittest.TestCase):
     tmp_app_root = json.loads(tmp_result.stdout.decode("utf-8"))["app_root"]
     self.assertTrue(os.path.samefile(tmp_app_root, self.root), tmp_app_root)
 
+  @unittest.skipIf(_MACOS, "macOS runs Python in the launcher's process")
   def test_exit_code_forwarded(self) -> None:
     """The launcher exits with Python's exit code."""
     self._with_runtime()
@@ -137,6 +143,48 @@ class LauncherTest(unittest.TestCase):
     self.assertIn(
       "PyMOL-Open-Source: runtime not found:", tmp_result.stderr.decode("utf-8")
     )
+
+  def _run_unloadable(self, launcher: pathlib.Path, runtime: pathlib.Path) -> str:
+    """Runs a launcher beside a runtime whose libpython does not load.
+
+    Args:
+      launcher: Where the launcher is copied to.
+      runtime: The runtime folder the launcher is to find.
+
+    Returns:
+      What the launcher wrote to stderr; it must have exited 127.
+    """
+    _copy_executable(_LAUNCHER, launcher)
+    tmp_library = runtime / "lib" / "libpython3.13.dylib"
+    tmp_library.parent.mkdir(parents=True)
+    tmp_library.write_bytes(b"not a library")
+    tmp_result = subprocess.run(
+      [str(launcher)], capture_output=True, check=False, timeout=60
+    )
+    self.assertEqual(tmp_result.returncode, 127, tmp_result.stderr)
+    return tmp_result.stderr.decode("utf-8")
+
+  @unittest.skipUnless(_MACOS, "the macOS app layout")
+  def test_app_layout_root(self) -> None:
+    """Inside an .app the launcher looks in Contents/Resources/runtime."""
+    tmp_contents = self.root / "PyMOL-Open-Source.app" / "Contents"
+    tmp_stderr = self._run_unloadable(
+      tmp_contents / "MacOS" / "PyMOL-Open-Source",
+      tmp_contents / "Resources" / "runtime",
+    )
+
+    self.assertIn("runtime not found:", tmp_stderr)
+    self.assertIn("Contents/Resources/runtime/lib/libpython", tmp_stderr)
+
+  @unittest.skipUnless(_MACOS, "the macOS app layout")
+  def test_flat_layout_root(self) -> None:
+    """Outside an .app the launcher looks in runtime/ beside itself."""
+    tmp_folder = self.root / "flat"
+    tmp_stderr = self._run_unloadable(
+      tmp_folder / "PyMOL-Open-Source", tmp_folder / "runtime"
+    )
+
+    self.assertIn(f"{tmp_folder.name}/runtime/lib/libpython", tmp_stderr)
 
 
 if __name__ == "__main__":
