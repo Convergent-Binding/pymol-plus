@@ -1,8 +1,14 @@
 # The Linux packages of the app: the libraries it bundles, the checks of
 # every binary's libraries, and the .tar.gz, .deb and .rpm.
 
+load("@app_project_metadata//:metadata.bzl", "VERSION")
+load("@rules_pkg//pkg:deb.bzl", "pkg_deb")
+load("@rules_pkg//pkg:mappings.bzl", "REMOVE_BASE_DIRECTORY", "pkg_attributes", "pkg_files", "pkg_mkdirs", "pkg_mklink")
+load("@rules_pkg//pkg:rpm.bzl", "pkg_rpm")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
-load(":dependencies.bzl", "BASE_SYSTEM_LIBRARIES", "RPM_SONAMES")
+load(":dependencies.bzl", "BASE_SYSTEM_LIBRARIES", "DEB_DEPENDS", "RPM_SONAMES")
+load(":packages.bzl", "linux_template")
 
 # Reads the libraries an ELF file needs and the glibc versions it uses.
 py_library(
@@ -66,4 +72,201 @@ py_test(
     python_version = "3.13",
     target_compatible_with = ["@platforms//os:linux"],
     deps = [":elf"],
+)
+
+py_binary(
+    name = "fill_template",
+    srcs = ["fill_template.py"],
+    python_version = "3.13",
+)
+
+# ----- The packages, as os_specific/linux/build_packages.sh built them with
+# fpm: the app in /opt/PyMOL-Open-Source-<version>, a command link, the
+# desktop integration files, the declared dependencies and the post-install
+# script. Files keep their own modes ("" for tar, "-" for rpm), so the
+# launcher and the runtime's programs stay executable.
+
+_NAME = "PyMOL-Open-Source"
+
+_INSTALL_DIR = "opt/PyMOL-Open-Source-" + VERSION
+
+_LICENSE = "BSD-3-Clause AND LGPL-3.0-only AND HPND"
+
+_MAINTAINER = "Hannah Kullik <hannah.kullik@studmail.w-hs.de>, Martin Urban <martin.urban@studmail.w-hs.de>"
+
+_URL = "https://kullik01.github.io/pymol-open-source-setup"
+
+_DESCRIPTION = "PyMOL-Open-Source - molecular visualization system (unofficial build of Open-Source PyMOL)"
+
+linux_template(
+    name = "desktop_entry",
+    out = "pymol-open-source.desktop",
+    replacements = {"/opt/pymol-open-source": "/" + _INSTALL_DIR},
+    template = "//distribution:os_specific/linux/pymol-open-source.desktop",
+)
+
+linux_template(
+    name = "metainfo",
+    out = "io.github.kullik01.pymol-open-source.metainfo.xml",
+    replacements = {"@VERSION@": VERSION},
+    template = "//distribution:os_specific/linux/io.github.kullik01.pymol-open-source.metainfo.xml",
+)
+
+pkg_files(
+    name = "desktop_files",
+    srcs = [
+        ":desktop_entry",
+        ":metainfo",
+        "//distribution:os_specific/linux/pymol-open-source-256.png",
+        "//distribution:os_specific/linux/pymol-open-source-mime.xml",
+    ],
+    attributes = pkg_attributes(mode = "0644"),
+    renames = {
+        ":desktop_entry": "usr/share/applications/pymol-open-source.desktop",
+        ":metainfo": "usr/share/metainfo/io.github.kullik01.pymol-open-source.metainfo.xml",
+        "//distribution:os_specific/linux/pymol-open-source-256.png": "usr/share/icons/hicolor/256x256/apps/pymol-open-source.png",
+        "//distribution:os_specific/linux/pymol-open-source-mime.xml": "usr/share/mime/packages/pymol-open-source.xml",
+    },
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+pkg_mklink(
+    name = "command_link",
+    link_name = "usr/bin/" + _NAME,
+    target = "/" + _INSTALL_DIR + "/" + _NAME,
+)
+
+# The app folder's contents in /opt, each file with its own mode (tar).
+pkg_files(
+    name = "app_files",
+    srcs = ["//distribution/bundle"],
+    attributes = json.encode({"mode": ""}),
+    prefix = _INSTALL_DIR,
+    renames = {"//distribution/bundle": REMOVE_BASE_DIRECTORY},
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+# The same for the rpm, whose %attr(-, ...) keeps each file's mode.
+pkg_files(
+    name = "app_files_rpm",
+    srcs = ["//distribution/bundle"],
+    attributes = pkg_attributes(mode = "-"),
+    prefix = _INSTALL_DIR,
+    renames = {"//distribution/bundle": REMOVE_BASE_DIRECTORY},
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+# The package owns its folder in /opt, so an update or uninstall removes it.
+pkg_mkdirs(
+    name = "install_dir",
+    attributes = pkg_attributes(mode = "0755"),
+    dirs = [_INSTALL_DIR],
+)
+
+# The portable archive: extracts into a single PyMOL-Open-Source-<version>/.
+pkg_files(
+    name = "tarball_files",
+    srcs = ["//distribution/bundle"],
+    attributes = json.encode({"mode": ""}),
+    prefix = _NAME + "-" + VERSION,
+    renames = {"//distribution/bundle": REMOVE_BASE_DIRECTORY},
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+pkg_tar(
+    name = "tarball",
+    srcs = [":tarball_files"],
+    extension = "tar.gz",
+    mode = "",
+    package_file_name = "{}_v{}.tar.gz".format(_NAME, VERSION),
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+pkg_tar(
+    name = "deb_data",
+    srcs = [
+        ":app_files",
+        ":command_link",
+        ":desktop_files",
+        ":install_dir",
+    ],
+    mode = "",
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+pkg_deb(
+    name = "deb",
+    architecture = "amd64",
+    data = ":deb_data",
+    depends = DEB_DEPENDS,
+    description = _DESCRIPTION,
+    homepage = _URL,
+    license = _LICENSE,
+    maintainer = _MAINTAINER,
+    package = "pymol-open-source",
+    package_file_name = "{}_v{}_amd64.deb".format(_NAME, VERSION),
+    postinst = "//distribution:os_specific/linux/remove_empty_old_folders.sh",
+    section = "science",
+    target_compatible_with = ["@platforms//os:linux"],
+    version = VERSION,
+)
+
+# Needs rpmbuild (rules_pkg's system rpmbuild toolchain).
+pkg_rpm(
+    name = "rpm",
+    srcs = [
+        ":app_files_rpm",
+        ":command_link",
+        ":desktop_files",
+        ":install_dir",
+    ],
+    architecture = "x86_64",
+    defines = {
+        # No /usr/lib/.build-id links: they would conflict with other
+        # packages that contain the same (bundled) libraries.
+        "_build_id_links": "none",
+    },
+    description = _DESCRIPTION,
+    group = "science",
+    license = _LICENSE,
+    package_file_name = "{}_v{}_x86_64.rpm".format(_NAME, VERSION),
+    package_name = _NAME,
+    posttrans_scriptlet_file = "//distribution:os_specific/linux/remove_empty_old_folders.sh",
+    release = "1",
+    requires = ["ca-certificates"] + [soname + "()(64bit)" for soname in RPM_SONAMES],
+    summary = _DESCRIPTION,
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:linux"],
+    url = _URL,
+    version = VERSION,
+)
+
+filegroup(
+    name = "packages",
+    srcs = [
+        ":deb",
+        ":rpm",
+        ":tarball",
+    ],
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:linux"],
+)
+
+py_test(
+    name = "packages_test",
+    size = "small",
+    srcs = ["tests/packages_test.py"],
+    args = [
+        "$(rootpath :tarball)",
+        "$(rootpath :deb)",
+        VERSION,
+    ] + DEB_DEPENDS,
+    data = [
+        ":deb",
+        ":tarball",
+    ],
+    legacy_create_init = False,
+    python_version = "3.13",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [":unpack_deb_lib"],
 )

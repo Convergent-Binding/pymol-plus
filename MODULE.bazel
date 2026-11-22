@@ -20,6 +20,15 @@ bazel_dep(name = "rules_cc", version = "0.2.22")
 bazel_dep(name = "rules_python", version = "2.3.2")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 
+# The Linux app's .tar.gz, .deb and .rpm (//distribution/linux).
+bazel_dep(name = "rules_pkg", version = "1.3.0")
+
+# rpmbuild of the machine that builds the Linux .rpm, found by rules_pkg.
+find_rpm = use_extension("@rules_pkg//toolchains/rpm:rpmbuild_configure.bzl", "find_system_rpmbuild_bzlmod")
+use_repo(find_rpm, "rules_pkg_rpmbuild")
+
+register_toolchains("@rules_pkg_rpmbuild//:all")
+
 # pyproject.toml's [project] table, read once and exposed as loadable
 # constants, so the wheel rules keep no second copy of the name, version,
 # requires-python or dependency list.
