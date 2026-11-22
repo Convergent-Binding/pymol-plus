@@ -1,8 +1,9 @@
-# Weekly pull requests for new versions of the GitHub Actions, the pinned Python
-# packages and the pre-commit hooks; updates are grouped to keep the number low.
+# Weekly pull requests for new versions of the GitHub Actions and the pinned Python
+# packages; updates are grouped to keep the number low.
 # Only versions released at least 14 days ago are proposed (cooldown), so broken
 # releases are usually withdrawn or fixed before they reach a pull request.
-# The Python packages and pre-commit hooks are those of the app in distribution/;
+# The Python packages are those of the app in distribution/, the quick checks' tools
+# (checks_requirements.in) included;
 # the GitHub Actions updates cover all workflows of the repository.
 version: 2
 updates:
@@ -39,13 +40,3 @@ updates:
         versions: [">=6.10"]
       - dependency-name: "shiboken6"
         versions: [">=6.10"]
-
-  - package-ecosystem: "pre-commit"
-    directory: "/distribution"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 14
-    groups:
-      pre-commit-hooks:
-        patterns: ["*"]

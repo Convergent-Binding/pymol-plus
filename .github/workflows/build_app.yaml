@@ -80,32 +80,23 @@ jobs:
           echo "build=${BUILD}" | tee -a "$GITHUB_OUTPUT"
   # --- end
 
-  # ----- Quick checks: Python (ruff), shell scripts (shellcheck) and workflows (actionlint),
-  # configured in distribution/.pre-commit-config.yaml; they check the app's files and
-  # workflows only, not the PyMOL wheel sources
+  # ----- Quick checks: Python (ruff) and shell scripts (shellcheck) of the app, and the
+  # repository's workflows (actionlint), from pinned wheels (//distribution:checks); not
+  # the PyMOL wheel sources
   checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          # The pre-commit cache below is the one this job uses
-          enable-cache: false
-
-      - name: Cache the check tools
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('distribution/.pre-commit-config.yaml') }}
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
 
       - name: Run the checks
-        # pre-commit runs from the repository root, so the files are given explicitly
-        run: |
-          git ls-files -z . ../.github/workflows/build_app.yaml ../.github/workflows/docs.yaml \
-            | xargs -0 uvx pre-commit@4.7.0 run --config .pre-commit-config.yaml --show-diff-on-failure --files
+        run: bazel run //distribution:checks
 
       - name: Validate the Linux desktop entry and AppStream metadata
         run: |
