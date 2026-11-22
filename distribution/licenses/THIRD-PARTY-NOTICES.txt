@@ -23,8 +23,8 @@ Qt 6 and Qt for Python (PySide6, shiboken6)
     https://download.qt.io/official_releases/qt/
 
 OpenSSL 3 (Apache License 2.0)
-    See Apache-2.0.txt. Bundled by cx_Freeze/freeze-core (Linux, macOS) and by
-    Python (Windows). Source code: https://www.openssl.org/source/
+    See Apache-2.0.txt. Part of the Python runtime (python-build-standalone)
+    on every platform. Source code: https://www.openssl.org/source/
 
 Mesa llvmpipe, opengl32sw.dll (Windows only; MIT license, with LLVM under the
 Apache License 2.0 with LLVM Exceptions)
@@ -33,23 +33,32 @@ Apache License 2.0 with LLVM Exceptions)
     Source code: https://download.qt.io/development_releases/prebuilt/llvmpipe/windows/
 
 Microsoft Visual C++ runtime (Windows only)
-    See share/licenses/vc_redist in the application folder.
+    See the vc_redist folder next to this file.
 
-cx_Freeze (Python Software Foundation-style license)
-    Freezes the application; see frozen_application_license.txt in the
-    application folder.
-
-Native libraries of the Linux build (bundled by cx_Freeze/freeze-core):
+Python runtime (python-build-standalone)
+    CPython under the Python Software Foundation License, see
+    Python/LICENSE.txt. The runtime also contains these native libraries,
+    depending on the platform:
     SQLite                public domain
     Tcl/Tk 8.6            Tcl/Tk license (BSD-style)
     libffi                MIT license
-    bzip2                 bzip2 license (BSD-style)
-    xz (liblzma)          public domain
-    libpng                libpng license
-    FreeType              FreeType License (BSD-style)
-    Fontconfig, Xft       MIT-style licenses
-    libuuid               BSD license
-    libxcb-cursor         MIT license (bundled for Qt's X11 support)
+    bzip2                 bzip2 license (BSD-style), see Python/LICENSE.txt
+    xz (liblzma)          public domain / 0BSD
+    zlib                  zlib license
+    mpdecimal             BSD license
+    libedit, ncurses      BSD and MIT-style licenses (Linux, macOS)
+    libX11, libxcb        MIT licenses (Linux, for Tk)
+    libuuid               BSD license (Linux)
+    Source code: https://github.com/astral-sh/python-build-standalone
+
+libgomp, the GNU OpenMP runtime (Linux only)
+    From GCC, under the GPL v3 with the GCC Runtime Library Exception, see
+    GPL-3.0.txt and GCC-exception-3.1.txt. PyMOL uses it for parallel
+    computations. Source code: https://gcc.gnu.org/
+
+libxcb-cursor (Linux only; MIT license)
+    Bundled for Qt's X11 support, from Ubuntu's libxcb-cursor0 package.
+    Source code: https://gitlab.freedesktop.org/xorg/lib/libxcb-cursor
 
 OpenBLAS, libgfortran and libquadmath (bundled by numpy)
     Covered by numpy/LICENSE.txt.
