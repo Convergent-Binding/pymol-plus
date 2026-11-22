@@ -61,6 +61,7 @@ class WheelLayoutTest(unittest.TestCase):
     for member in (
         "pymol/__init__.py",
         "pymol2/__init__.py",
+        "pymol3/__init__.py",
         "chempy/__init__.py",
         "pmg_tk/__init__.py",
         "pmg_qt/forms/colors.ui",
