@@ -115,7 +115,7 @@ Deliberate limits:
   would drop macOS 12 and RHEL/AlmaLinux 8.
 - **biopython** stays at 1.86: newer versions have no Python 3.13 wheels for Intel Macs.
 
-PyMOL itself is no dependency Dependabot updates: the app bundles the wheel built from this
+Dependabot does not update PyMOL itself: the app bundles the wheel built from this
 repository. When a PyMOL file that `edited/` replaces changes in `modules/`,
 `//distribution/edited:edited_base_test` fails until the edits are ported.
 

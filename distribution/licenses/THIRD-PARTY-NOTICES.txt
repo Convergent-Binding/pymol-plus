@@ -64,7 +64,10 @@ Libraries built into PyMOL's _cmd (every platform)
     netCDF-C              BSD-3-Clause, see netCDF-C.txt
     pocketfft             BSD-3-Clause, see pocketfft.txt
     VMD molfile plugins   UIUC Open Source License, see
-                          UIUC-molfile-plugins.txt
+                          UIUC-molfile-plugins.txt; some plugins'
+                          parts (D. E. Shaw Research, Georgia Tech, UCSF,
+                          ABINIT) carry their own notices, see
+                          molfile-plugins-other-notices.txt
     Portions of this software are copyright (C) 2025 The FreeType Project
     (www.freetype.org). All rights reserved.
 
