@@ -1250,8 +1250,14 @@ def execapp():
     # fix Windows taskbar icon
     if pymol.IS_WINDOWS:
         import ctypes
+        # BEGIN EDITED CODE SEGMENT
+        # :author Martin Urban
+        # The app's own taskbar identity, the AppUserModelID of its shortcuts
+        # (setup.iss) and of startup_wrapper.py, so the running app joins the
+        # pinned shortcut's group and stays apart from other PyMOL installations
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
-                u'com.schrodinger.pymol')
+                u'io.github.kullik01.pymol-open-source')
+        # END EDITED CODE SEGMENT
 
     app = PyMOLApplication(['PyMOL'])
     app.setWindowIcon(make_pymol_qicon())
