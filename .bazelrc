@@ -11,6 +11,11 @@ build --compilation_mode=opt
 # The wheels are tagged macosx_12_0, so the binaries must not need more.
 build --macos_minimum_os=12.0
 
+# The app's wheels must run there too (LSMinimumSystemVersion in
+# distribution/os_specific/macos/Info.plist): numpy, for one, also ships
+# wheels for macOS 14 on Apple Silicon, which pip.parse would otherwise take.
+build:macos --@rules_python//python/config_settings:pip_whl_osx_version=12.0
+
 # PyMOLBuildInfo.h's git SHA comes from Bazel's stable workspace status rather
 # than from a `git` call inside a build action. On Windows the status command
 # must be a cmd.exe script: launching a .sh file through MSYS2 as Bazel's raw
