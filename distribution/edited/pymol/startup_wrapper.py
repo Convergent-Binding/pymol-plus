@@ -61,7 +61,24 @@ def _use_whole_scale_on_wayland() -> None:
     os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "Ceil"
 
 
+def _use_app_user_model_id() -> None:
+  """Gives the Windows process the app's taskbar identity.
+
+  The window belongs to the bundled pythonw.exe, so without an explicit
+  AppUserModelID the taskbar shows Python's icon in a group of its own. The
+  installer's shortcuts carry the same ID (setup.iss), so the running app
+  joins their group and shows their icon.
+  """
+  if sys.platform != "win32":
+    return
+  import ctypes
+  ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+    "io.github.kullik01.pymol-open-source"
+  )
+
+
 if __name__ == '__main__':
+  _use_app_user_model_id()
   _use_system_ca_certificates()
   _use_pyside6()
   _use_whole_scale_on_wayland()

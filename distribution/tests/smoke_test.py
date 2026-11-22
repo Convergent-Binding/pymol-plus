@@ -83,6 +83,30 @@ def check_licenses() -> None:
     assert tmp_vc_redist.is_dir(), "license of the C++ runtime missing"
 
 
+APP_USER_MODEL_ID = "io.github.kullik01.pymol-open-source"
+"""The app's identity on the Windows taskbar, also its shortcuts' (setup.iss)."""
+
+
+def check_app_user_model_id() -> None:
+  """The Windows process carries the app's AppUserModelID.
+
+  The window belongs to pythonw.exe; without the ID the taskbar shows
+  Python's icon in a group of its own instead of the pinned shortcut's.
+  """
+  if sys.platform != "win32":
+    return
+  import ctypes  # noqa: PLC0415  (Windows only)
+
+  tmp_id = ctypes.c_wchar_p()
+  tmp_result = ctypes.windll.shell32.GetCurrentProcessExplicitAppUserModelID(
+    ctypes.byref(tmp_id)
+  )
+  assert tmp_result == 0, f"no AppUserModelID set (HRESULT {tmp_result:#x})"
+  tmp_value = tmp_id.value
+  ctypes.windll.ole32.CoTaskMemFree(tmp_id)
+  assert tmp_value == APP_USER_MODEL_ID, f"AppUserModelID is {tmp_value}"
+
+
 def check_certificates() -> None:
   """HTTPS needs CA certificates: on Windows from the Windows store, otherwise from the file
   that startup_wrapper.py sets as SSL_CERT_FILE."""
@@ -145,6 +169,7 @@ def check_gui(a_tmp_dir: str) -> str:
 try:
   check_bundled_modules_and_data()
   check_licenses()
+  check_app_user_model_id()
   check_certificates()
   with tempfile.TemporaryDirectory() as tmp_dir:
     check_commands(tmp_dir)

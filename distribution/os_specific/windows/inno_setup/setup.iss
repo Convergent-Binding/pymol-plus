@@ -1,13 +1,13 @@
 ; Inno Setup script of the PyMOL-Open-Source Windows installer (x64).
-; Build it with: win_automator.bat build inno_setup
+; Build it with: bazel build //distribution/windows:installer
 ; which passes the following defines to the compiler (ISCC):
-;   MyAppVersion  - version from pyproject.toml
-;   AppSourceDir  - directory of the frozen application (dist\exe.win-amd64-<python version>)
+;   MyAppVersion  - version from distribution/pyproject.toml
+;   AppSourceDir  - the app folder (//distribution/bundle)
 #ifndef MyAppVersion
-  #error MyAppVersion is not defined. Use: win_automator.bat build inno_setup
+  #error MyAppVersion is not defined. Use: bazel build //distribution/windows:installer
 #endif
 #ifndef AppSourceDir
-  #error AppSourceDir is not defined. Use: win_automator.bat build inno_setup
+  #error AppSourceDir is not defined. Use: bazel build //distribution/windows:installer
 #endif
 
 [Setup]
@@ -50,7 +50,7 @@ Name: "{app}\assets"
 Name: "{app}\bin"
 
 [InstallDelete]
-; On an upgrade, files of older versions must not stay in the frozen application
+; On an upgrade, files of older versions (also of the cx_Freeze app) must not stay in the app
 Type: filesandordirs; Name: "{app}\bin"
 ; Shortcuts of older versions, which were called "Open-Source PyMOL"
 Type: files; Name: "{autodesktop}\Open-Source PyMOL.lnk"
@@ -61,8 +61,10 @@ Source: "..\logo.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "{#AppSourceDir}\*"; DestDir: "{app}\bin"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{autodesktop}\PyMOL-Open-Source"; Filename: "{app}\bin\PyMOL-Open-Source.exe"; IconFilename: "{app}\assets\logo.ico"
-Name: "{autoprograms}\PyMOL-Open-Source"; Filename: "{app}\bin\PyMOL-Open-Source.exe"; IconFilename: "{app}\assets\logo.ico"
+; The AppUserModelID is the one startup_wrapper.py gives the running app (whose window belongs to
+; the bundled pythonw.exe), so the taskbar shows it in the shortcut's group, with its icon
+Name: "{autodesktop}\PyMOL-Open-Source"; Filename: "{app}\bin\PyMOL-Open-Source.exe"; IconFilename: "{app}\assets\logo.ico"; AppUserModelID: "io.github.kullik01.pymol-open-source"
+Name: "{autoprograms}\PyMOL-Open-Source"; Filename: "{app}\bin\PyMOL-Open-Source.exe"; IconFilename: "{app}\assets\logo.ico"; AppUserModelID: "io.github.kullik01.pymol-open-source"
 
 [Registry]
 ; File types (per-user, HKA = HKCU for this per-user installation). PyMOL is offered in "Open with"
