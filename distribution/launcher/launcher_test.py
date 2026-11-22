@@ -15,6 +15,8 @@ import sys
 import tempfile
 import unittest
 
+import pe_imports
+
 
 _LAUNCHER = pathlib.Path(sys.argv[1])
 """The launcher under test."""
@@ -115,6 +117,17 @@ class LauncherTest(unittest.TestCase):
     self._with_runtime()
 
     self.assertEqual(self._run(exit_code=3).returncode, 3)
+
+  @unittest.skipUnless(_WINDOWS, "a Windows import table")
+  def test_no_cpp_runtime_import(self) -> None:
+    """The launcher sits outside runtime/, so it links its C runtime in."""
+    tmp_runtime_imports = [
+      tmp_name
+      for tmp_name in pe_imports.imported_dlls(_LAUNCHER)
+      if pe_imports.RUNTIME_DLL.match(tmp_name)
+    ]
+
+    self.assertEqual(tmp_runtime_imports, [])
 
   def test_missing_runtime(self) -> None:
     """Without the runtime the launcher says so and exits 127."""

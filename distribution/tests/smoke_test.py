@@ -9,6 +9,7 @@ Note: the certificate check fails if only SSL_CERT_DIR is set (lazily loaded).
 
 Prints "SMOKE TEST OK" on success, otherwise exits with status 1.
 """
+import ctypes
 import faulthandler
 import os
 import pathlib
@@ -73,11 +74,36 @@ def check_licenses() -> None:
                    "LGPL-3.0.txt", "PySide6_Essentials/LGPL-3.0.txt", "Python/LICENSE.txt"):
     tmp_text = tmp_licenses_dir / tmp_name
     assert tmp_text.is_file(), f"license file missing: {tmp_name}"
-  # Only the cx_Freeze app bundles the C++ runtime so far; the Bazel-built
-  # app does not yet.
-  if sys.platform == "win32" and not tmp_app_root:
-    tmp_vc_redist = tmp_exe_dir / "share" / "licenses" / "vc_redist"
+  # The Windows app bundles the Microsoft C++ runtime with its license: the
+  # Bazel-built app in licenses/, the cx_Freeze app in share/licenses/.
+  if sys.platform == "win32":
+    if tmp_app_root:
+      tmp_vc_redist = tmp_licenses_dir / "vc_redist"
+    else:
+      tmp_vc_redist = tmp_exe_dir / "share" / "licenses" / "vc_redist"
     assert tmp_vc_redist.is_dir(), "license of the C++ runtime missing"
+
+
+APP_USER_MODEL_ID = "io.github.kullik01.pymol-open-source"
+"""The app's identity on the Windows taskbar, also its shortcuts'."""
+
+
+def check_app_user_model_id() -> None:
+  """The Windows process carries the app's AppUserModelID.
+
+  The window belongs to pythonw.exe; without the ID the taskbar shows
+  Python's icon in a group of its own instead of the pinned shortcut's.
+  """
+  if sys.platform != "win32":
+    return
+  tmp_id = ctypes.c_wchar_p()
+  tmp_result = ctypes.windll.shell32.GetCurrentProcessExplicitAppUserModelID(
+    ctypes.byref(tmp_id)
+  )
+  assert tmp_result == 0, f"no AppUserModelID set (HRESULT {tmp_result:#x})"
+  tmp_value = tmp_id.value
+  ctypes.windll.ole32.CoTaskMemFree(tmp_id)
+  assert tmp_value == APP_USER_MODEL_ID, f"AppUserModelID is {tmp_value}"
 
 
 def check_certificates() -> None:
@@ -142,6 +168,7 @@ def check_gui(a_tmp_dir: str) -> str:
 try:
   check_bundled_modules_and_data()
   check_licenses()
+  check_app_user_model_id()
   check_certificates()
   with tempfile.TemporaryDirectory() as tmp_dir:
     check_commands(tmp_dir)

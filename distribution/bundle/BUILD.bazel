@@ -96,6 +96,12 @@ app_bundle(
         "rules",
     ],
     launcher = "//distribution/launcher",
+    # Windows: the C++ runtime's license, from the Redistributable the
+    # runtime_trees DLLs come from.
+    license_trees = select({
+        "@platforms//os:windows": {"//distribution/windows:msvc_runtime_license": "vc_redist"},
+        "//conditions:default": {},
+    }),
     licenses = ["//distribution:license_texts"],
     lock = "//distribution:requirements_lock.txt",
     overlays = {
@@ -118,6 +124,18 @@ app_bundle(
     }),
     python_version = "3.13",
     runtime = "@python_3_13//:files",
+    # Windows: Qt's software OpenGL where pythonw.exe would load an
+    # opengl32.dll copied from it (the website's troubleshooting note).
+    runtime_from_site_packages = select({
+        "@platforms//os:windows": {"PySide6/opengl32sw.dll": "opengl32sw.dll"},
+        "//conditions:default": {},
+    }),
+    # Windows: the C++ and OpenMP runtime beside pythonw.exe, the only place
+    # a PC without the VC++ Redistributable finds it for _cmd.
+    runtime_trees = select({
+        "@platforms//os:windows": ["//distribution/windows:msvc_runtime_dlls"],
+        "//conditions:default": [],
+    }),
     site_packages = ":site_packages",
     target = select({
         "@platforms//os:windows": "windows-x86_64",
@@ -127,4 +145,16 @@ app_bundle(
     }),
     visibility = ["//distribution:__subpackages__"],
     wheel = "//tools/bazel/wheel",
+)
+
+# Windows: every C++/OpenMP runtime DLL a bundle binary imports ships with it.
+py_test(
+    name = "msvc_runtime_test",
+    size = "small",
+    srcs = ["tests/msvc_runtime_test.py"],
+    args = ["$(rootpath :bundle)"],
+    data = [":bundle"],
+    legacy_create_init = False,
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = ["//distribution/windows:pe_imports"],
 )

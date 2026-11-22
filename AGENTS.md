@@ -40,7 +40,12 @@ distribution/README.md.
 - `bazel test //...`: all tests; `bazel test //tests` only the pytest tests under `tests/`
 - `bazel run //tools/bazel:requirements.update`: relock `tools/bazel/requirements.in`
 
-**App commands** (in `distribution/`; Windows: `win_automator.bat` instead of `./automator.sh`):
+**App commands, Windows** (anywhere in the repository):
+- `bazel build //distribution/windows:portable_zip //distribution/windows:installer`: the ZIP and
+  the installer (Inno Setup 7 installed); `//distribution/bundle` is the app folder
+- `bazel test //distribution/...`: the app's tests, a moved copy's headless smoke test included
+
+**App commands, macOS and Linux** (in `distribution/`, still cx_Freeze):
 - `./automator.sh setup`: fresh `.venv` with the Python of `.python-version` and `requirements.txt` (uv)
 - `./automator.sh build app` / `build packages` / `build all`; `./automator.sh test` / `test gui`
 - `uvx pre-commit run --all-files`: ruff, shellcheck, actionlint (the CI job "checks")
