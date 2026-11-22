@@ -68,8 +68,12 @@ class PackagesTest(unittest.TestCase):
   def setUpClass(cls) -> None:
     """Splits the .deb into its control and data archives."""
     tmp_members = unpack_deb._ar_members(pathlib.Path(_DEB).read_bytes())
-    cls.control = next(v for k, v in tmp_members.items() if k.startswith("control.tar"))
-    cls.data = next(v for k, v in tmp_members.items() if k.startswith("data.tar"))
+    cls.control = next(
+      v for k, v in tmp_members.items() if k.startswith("control.tar")
+    )
+    cls.data = next(
+      v for k, v in tmp_members.items() if k.startswith("data.tar")
+    )
 
   def test_tarball_top_folder(self) -> None:
     """The tarball extracts into PyMOL-Open-Source-<version>/."""
@@ -79,7 +83,9 @@ class PackagesTest(unittest.TestCase):
     tmp_members = _tar_members(pathlib.Path(_TARBALL).read_bytes())
     tmp_top = {tmp_name.split("/")[0] for tmp_name in tmp_members}
     self.assertEqual(tmp_top, {f"PyMOL-Open-Source-{_VERSION}"})
-    tmp_launcher = tmp_members[f"PyMOL-Open-Source-{_VERSION}/PyMOL-Open-Source"]
+    tmp_launcher = tmp_members[
+      f"PyMOL-Open-Source-{_VERSION}/PyMOL-Open-Source"
+    ]
     self.assertTrue(tmp_launcher.mode & stat.S_IXUSR)
 
   def test_deb_control(self) -> None:
@@ -110,14 +116,18 @@ class PackagesTest(unittest.TestCase):
     ):
       with self.subTest(path=tmp_path):
         self.assertIn(tmp_path, tmp_members)
-    self.assertTrue(tmp_members[f"{_INSTALL}/PyMOL-Open-Source"].mode & stat.S_IXUSR)
+    self.assertTrue(
+      tmp_members[f"{_INSTALL}/PyMOL-Open-Source"].mode & stat.S_IXUSR
+    )
     tmp_link = tmp_members["usr/bin/PyMOL-Open-Source"]
     self.assertTrue(tmp_link.issym())
     self.assertEqual(tmp_link.linkname, f"/{_INSTALL}/PyMOL-Open-Source")
 
   def test_desktop_entry_names_install_dir(self) -> None:
     """The desktop entry starts the installed app, not the template path."""
-    tmp_entry = _tar_text(self.data, "usr/share/applications/pymol-open-source.desktop")
+    tmp_entry = _tar_text(
+      self.data, "usr/share/applications/pymol-open-source.desktop"
+    )
 
     self.assertIn(f"/{_INSTALL}", tmp_entry)
     self.assertNotIn("/opt/pymol-open-source", tmp_entry)

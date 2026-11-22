@@ -68,7 +68,9 @@ def _segments(data: bytes) -> list[tuple[int, int, int, int]]:
   return tmp_segments
 
 
-def _file_offset(segments: list[tuple[int, int, int, int]], address: int) -> int:
+def _file_offset(
+  segments: list[tuple[int, int, int, int]], address: int
+) -> int:
   """Maps a virtual address to a file offset through the loaded segments.
 
   Args:
@@ -115,8 +117,9 @@ def needed_libraries(path: pathlib.Path) -> list[str]:
   if tmp_strtab is None:
     return []
   return [
-    tmp_data[tmp_strtab + tmp_name : tmp_data.index(b"\0", tmp_strtab + tmp_name)]
-    .decode("ascii")
+    tmp_data[
+      tmp_strtab + tmp_name : tmp_data.index(b"\0", tmp_strtab + tmp_name)
+    ].decode("ascii")
     for tmp_name in tmp_needed
   ]
 

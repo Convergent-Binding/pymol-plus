@@ -371,42 +371,68 @@ jobs:
 
   # ----- GNU Linux build section
   build-gnu-linux:
-    # The oldest available runner, so the app also runs on older distributions
+    # PyPA's manylinux_2_28 image, in which the wheel is built too: binaries built
+    # there need at most glibc 2.28, so the app also runs on RHEL/AlmaLinux 8
     needs: changes
     if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-22.04
+    container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Python
-        uses: actions/setup-python@v7
-        with:
-          python-version-file: 'distribution/.python-version'
+      # The checkout belongs to another user than the container's root, and git
+      # refuses such a repository; the build-info header's git SHA comes from git.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Create virtual environment
-        run: ./automator.sh setup
-
-      - name: Install system packages
-        # libxcb-cursor is bundled into the app for Qt's X11 support (RHEL/Alma 8 only have
-        # it in EPEL); rpm and fpm build the packages
+      # The image ships no bazel; bazelisk honours .bazelversion.
+      - name: Install bazelisk
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libxcb-cursor0 rpm
-          sudo gem install --no-document fpm -v 1.18.0
+          curl -fsSL -o /usr/local/bin/bazel \
+            https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazel
+          bazel --version
 
-      - name: Build frozen application
-        run: ./automator.sh build app
+      - name: Install the OpenGL headers and rpmbuild
+        run: dnf install -y -q mesa-libGL-devel rpm-build
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
+
+      - name: Build the .tar.gz, .deb and .rpm packages
+        timeout-minutes: 45
+        run: bazel build //distribution/linux:packages
+
+      - name: Test the app and the packages with Bazel
+        # Also checks every binary's libraries and glibc 2.28
+        # (//distribution/linux:linux_libraries_test) and runs a moved copy headless
+        timeout-minutes: 15
+        run: bazel test //distribution/... --test_output=errors
+
+      - name: Collect the packages
+        # Bazel's output paths are relative to the repository root
+        run: |
+          ROOT="$(git rev-parse --show-toplevel)"
+          mkdir -p os_specific/dist
+          for TARGET in tarball deb rpm; do
+            cp "$ROOT/$(bazel cquery --output=files "//distribution/linux:$TARGET")" os_specific/dist/
+          done
+          ls -l os_specific/dist
+          rpm -qpi os_specific/dist/*.rpm
+          rpm -qpR os_specific/dist/*.rpm
+          rpm -qpl os_specific/dist/*.rpm | grep -v '/opt/' || true
 
       - name: Smoke test
+        # From the extracted tarball; the package tests below install the .deb and .rpm
         timeout-minutes: 5
-        run: ./automator.sh test
-
-      - name: Build .tar.gz, .deb and .rpm packages
-        run: ./automator.sh build packages
+        run: |
+          APP_DIR="$(mktemp -d)"
+          tar -xzf os_specific/dist/*.tar.gz -C "$APP_DIR"
+          tests/run_smoke_test.sh "$APP_DIR"/PyMOL-Open-Source-*/PyMOL-Open-Source
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -415,6 +441,18 @@ jobs:
           path: distribution/os_specific/dist/*
           # The packages are already compressed
           compression-level: 0
+
+  # The latest published release, for the package tests' update test. A job of its
+  # own: build-gnu-linux's container has no gh.
+  previous-linux-release:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: distribution/tests
 
       - name: Download the latest published release (update test)
         env:
@@ -432,7 +470,7 @@ jobs:
   # Installs the packages on clean distributions (the package manager has to
   # resolve all declared dependencies) and runs the headless and GUI smoke tests.
   test-gnu-linux-packages:
-    needs: build-gnu-linux
+    needs: [build-gnu-linux, previous-linux-release]
     strategy:
       fail-fast: false
       matrix:
@@ -529,7 +567,7 @@ jobs:
   # match. For a version tag it also creates a draft release with all files,
   # which can be checked and published on GitHub.
   release:
-    needs: [changes, checks, website, build-windows, build-macos, build-gnu-linux, test-gnu-linux-packages]
+    needs: [changes, checks, website, build-windows, build-macos, build-gnu-linux, previous-linux-release, test-gnu-linux-packages]
     # The ruleset of 'production' should require this check. It runs even if a job failed or was
     # skipped and fails if any job failed, because a skipped check counts as passed.
     # A cancelled run (a newer push to the same pull request) skips it.

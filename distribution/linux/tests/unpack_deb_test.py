@@ -83,14 +83,16 @@ class UnpackDebTest(unittest.TestCase):
     """A link in the package gives the file it points to."""
     tmp_out = self.root / "libxcb-cursor.so.0"
 
-    tmp_status = unpack_deb.main([
-      "--deb",
-      str(self.deb),
-      "--member",
-      "usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0",
-      "--out",
-      str(tmp_out),
-    ])
+    tmp_status = unpack_deb.main(
+      [
+        "--deb",
+        str(self.deb),
+        "--member",
+        "usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0",
+        "--out",
+        str(tmp_out),
+      ]
+    )
 
     self.assertEqual(tmp_status, 0)
     self.assertEqual(tmp_out.read_bytes(), b"library")
@@ -99,14 +101,16 @@ class UnpackDebTest(unittest.TestCase):
     """A path the package lacks fails, naming it."""
     tmp_stderr = io.StringIO()
     with contextlib.redirect_stderr(tmp_stderr):
-      tmp_status = unpack_deb.main([
-        "--deb",
-        str(self.deb),
-        "--member",
-        "usr/lib/missing.so",
-        "--out",
-        str(self.root / "missing.so"),
-      ])
+      tmp_status = unpack_deb.main(
+        [
+          "--deb",
+          str(self.deb),
+          "--member",
+          "usr/lib/missing.so",
+          "--out",
+          str(self.root / "missing.so"),
+        ]
+      )
 
     self.assertNotEqual(tmp_status, 0)
     self.assertIn("usr/lib/missing.so", tmp_stderr.getvalue())

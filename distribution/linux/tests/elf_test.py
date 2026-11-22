@@ -39,9 +39,7 @@ def _elf(needed: tuple[str, ...], extra: bytes = b"") -> bytes:
     b"\x7fELF"
     + bytes([2, 1, 1, 0])
     + bytes(8)
-    + struct.pack(
-      "<HHIQQQIHHHHHH", 3, 62, 1, 0, 64, 0, 0, 64, 56, 2, 64, 0, 0
-    )
+    + struct.pack("<HHIQQQIHHHHHH", 3, 62, 1, 0, 64, 0, 0, 64, 56, 2, 64, 0, 0)
   )
   tmp_load = struct.pack("<IIQQQQQQ", 1, 5, 0, 0, 0, tmp_size, tmp_size, 4096)
   tmp_dyn = struct.pack(
@@ -97,7 +95,9 @@ class ElfTest(unittest.TestCase):
     """DT_NEEDED entries come back in order."""
     tmp_path = self._file("_cmd.so", _elf(("libgomp.so.1", "libGL.so.1")))
 
-    self.assertEqual(elf.needed_libraries(tmp_path), ["libgomp.so.1", "libGL.so.1"])
+    self.assertEqual(
+      elf.needed_libraries(tmp_path), ["libgomp.so.1", "libGL.so.1"]
+    )
 
   def test_glibc_versions(self) -> None:
     """The GLIBC_x.y version names the file uses."""
