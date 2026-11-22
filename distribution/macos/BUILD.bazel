@@ -3,6 +3,7 @@
 
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
 load(":app.bzl", "macos_app")
+load(":sign_and_dmg.bzl", "macos_dmg", "macos_signed_app")
 
 # Reads Mach-O architectures and minimum macOS versions; thins universal
 # files.
@@ -86,4 +87,41 @@ py_test(
     python_version = "3.13",
     target_compatible_with = ["@platforms//os:macos"],
     deps = [":macho"],
+)
+
+py_binary(
+    name = "sign_app",
+    srcs = ["sign_app.py"],
+    python_version = "3.13",
+)
+
+py_binary(
+    name = "make_dmg",
+    srcs = ["make_dmg.py"],
+    python_version = "3.13",
+    deps = [":macho"],
+)
+
+# The app signed ad hoc, so Gatekeeper does not call the download damaged.
+macos_signed_app(
+    name = "signed_app",
+    app = ":app",
+    target_compatible_with = ["@platforms//os:macos"],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# PyMOL-Open-Source_v<version>_macOS_<AppleSilicon|Intel>.dmg. Manual: it
+# mounts disk images with hdiutil.
+macos_dmg(
+    name = "dmg",
+    app = ":signed_app",
+    background = "//distribution:os_specific/macos/dmg/dmg_background.svg",
+    create_dmg = "@create_dmg//:create-dmg",
+    create_dmg_files = ["@create_dmg//:files"],
+    label_name = select({
+        ":arm64": "AppleSilicon",
+        "//conditions:default": "Intel",
+    }),
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:macos"],
 )
