@@ -65,7 +65,9 @@ def extract(deb: pathlib.Path, member: str) -> bytes:
     fileobj=io.BytesIO(tmp_members["data.tar.xz"]), mode="r:xz"
   ) as tmp_tar:
     tmp_names = {
-      posixpath.normpath(tmp_member.name.removeprefix("./").lstrip("/")): tmp_member
+      posixpath.normpath(
+        tmp_member.name.removeprefix("./").lstrip("/")
+      ): tmp_member
       for tmp_member in tmp_tar.getmembers()
     }
     tmp_path = posixpath.normpath(member)

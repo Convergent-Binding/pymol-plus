@@ -86,6 +86,9 @@ BASE_SYSTEM_LIBRARIES = [
     "librt.so.1",
     "libstdc++.so.6",
     "libutil.so.1",
+    "libz.so.1",
+    "libzstd.so.1",
 ]
-"""glibc's own libraries and the C++ runtime, which every supported
-distribution installs with its base system."""
+"""glibc's own libraries, the C++ runtime, zlib and zstd (Qt's compression),
+which every supported distribution installs with its base system: its
+package manager needs them."""
