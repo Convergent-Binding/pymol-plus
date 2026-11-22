@@ -386,6 +386,9 @@ def assemble(args: argparse.Namespace) -> None:
       raise BundleError(f"site-packages holds no {tmp_source.as_posix()}.")
     _copy(tmp_file, tmp_runtime / tmp_destination)
 
+  for tmp_source, tmp_destination in _pairs(args.bundle_file):
+    _copy(tmp_source, tmp_out / tmp_destination)
+
   tmp_launcher = pathlib.Path(args.launcher)
   _copy(tmp_launcher, tmp_out / tmp_launcher.name)
 
@@ -443,6 +446,12 @@ def main(argv: list[str]) -> int:
     "--overlay", action="append", default=[], help="SOURCE=site-packages path"
   )
   tmp_parser.add_argument("--launcher", required=True)
+  tmp_parser.add_argument(
+    "--bundle-file",
+    action="append",
+    default=[],
+    help="SOURCE=path in the app folder, copied after the packages",
+  )
   tmp_parser.add_argument(
     "--runtime-tree",
     action="append",

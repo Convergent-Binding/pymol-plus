@@ -1,0 +1,69 @@
+# The Linux packages of the app: the libraries it bundles, the checks of
+# every binary's libraries, and the .tar.gz, .deb and .rpm.
+
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load(":dependencies.bzl", "BASE_SYSTEM_LIBRARIES", "RPM_SONAMES")
+
+# Reads the libraries an ELF file needs and the glibc versions it uses.
+py_library(
+    name = "elf",
+    srcs = ["elf.py"],
+    imports = ["."],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+py_test(
+    name = "elf_test",
+    size = "small",
+    srcs = ["tests/elf_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":elf"],
+)
+
+py_library(
+    name = "unpack_deb_lib",
+    srcs = ["unpack_deb.py"],
+    imports = ["."],
+)
+
+py_binary(
+    name = "unpack_deb",
+    srcs = ["unpack_deb.py"],
+    python_version = "3.13",
+)
+
+py_test(
+    name = "unpack_deb_test",
+    size = "small",
+    srcs = ["tests/unpack_deb_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":unpack_deb_lib"],
+)
+
+# Qt's X11 cursor library from Ubuntu 20.04's package (@libxcb_cursor_deb),
+# for the app: RHEL and AlmaLinux 8 ship it only in EPEL.
+genrule(
+    name = "libxcb_cursor",
+    srcs = ["@libxcb_cursor_deb//file"],
+    outs = ["libxcb-cursor.so.0"],
+    cmd = "$(execpath :unpack_deb) --deb $(location @libxcb_cursor_deb//file) " +
+          "--member usr/lib/x86_64-linux-gnu/libxcb-cursor.so.0 --out $@",
+    target_compatible_with = ["@platforms//os:linux"],
+    tools = [":unpack_deb"],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# Every library the app needs is bundled or declared, on glibc 2.28.
+py_test(
+    name = "linux_libraries_test",
+    size = "small",
+    srcs = ["tests/linux_libraries_test.py"],
+    args = ["$(rootpath //distribution/bundle)"] + RPM_SONAMES + BASE_SYSTEM_LIBRARIES,
+    data = ["//distribution/bundle"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    target_compatible_with = ["@platforms//os:linux"],
+    deps = [":elf"],
+)

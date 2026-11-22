@@ -84,6 +84,16 @@ config_setting(
 # prints its path.
 app_bundle(
     name = "bundle",
+    # Linux: the libraries a minimal system lacks, which cx_Freeze copied in:
+    # OpenMP for _cmd, loaded by startup_wrapper.py, and Qt's X11 cursor
+    # library beside Qt's, where its xcb plugin's $ORIGIN path finds it.
+    bundle_files = select({
+        "@platforms//os:linux": {
+            "@gomp_linux//:libgomp": "runtime/lib/libgomp.so.1",
+            "//distribution/linux:libxcb_cursor": "runtime/lib/python3.13/site-packages/PySide6/Qt/lib/libxcb-cursor.so.0",
+        },
+        "//conditions:default": {},
+    }),
     distributions = [
         "pymol-open-source-whl",
         "PySide6-Essentials",
