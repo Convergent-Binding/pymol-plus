@@ -296,46 +296,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Python
-        uses: actions/setup-python@v7
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          python-version-file: 'distribution/.python-version'
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}-${{ matrix.runner }}
 
       - name: Extract project version
         run: echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
 
-      - name: Create virtual environment
-        run: ./automator.sh setup
+      - name: Build the app and its DMG
+        # Bazel wraps the app into PyMOL-Open-Source.app for this Mac's architecture,
+        # signs it ad hoc (prevents Gatekeeper "damaged app" errors) and writes the DMG
+        timeout-minutes: 45
+        run: bazel build //distribution/macos:signed_app //distribution/macos:dmg
 
-      - name: Build app bundle
-        run: ./automator.sh build app
+      - name: Test the app with Bazel
+        # Also checks that every binary has this architecture and runs on macOS 12
+        # (//distribution/macos:app_checks_test) and runs a moved copy headless
+        timeout-minutes: 15
+        run: bazel test //distribution/... --test_output=errors
 
-      - name: Ad-hoc sign app bundle
-        # Prevents Gatekeeper "damaged app" errors
-        run: codesign --force --deep --sign - "dist/PyMOL-Open-Source.app"
+      - name: Collect the app and the DMG
+        # Bazel's output paths are relative to the repository root
+        run: |
+          ROOT="$(git rev-parse --show-toplevel)"
+          mkdir -p os_specific/dist
+          cp "$ROOT/$(bazel cquery --output=files //distribution/macos:dmg)" os_specific/dist/
+          APP_DIR="${RUNNER_TEMP}/app"
+          mkdir -p "$APP_DIR"
+          cp -R "$ROOT/$(bazel cquery --output=files //distribution/macos:signed_app)" "$APP_DIR/"
+          echo "APP=${APP_DIR}/PyMOL-Open-Source.app" >> "$GITHUB_ENV"
+          ls -l os_specific/dist
 
       - name: Smoke test
         timeout-minutes: 5
         run: |
-          ./automator.sh test
-          tests/run_smoke_test.sh --gui "dist/PyMOL-Open-Source.app/Contents/MacOS/PyMOL-Open-Source"
-          codesign --verify --deep "dist/PyMOL-Open-Source.app"
-
-      - name: Install create-dmg
-        env:
-          CREATE_DMG_VERSION: "1.3.0"
-          CREATE_DMG_SHA256: "c50d2bc97c3d6292642bac55f530d247eaf4bf65ee605f26b4caf339383e381c"
-        run: |
-          curl -fsSL -o "${RUNNER_TEMP}/create-dmg.tar.gz" "https://github.com/create-dmg/create-dmg/archive/refs/tags/v${CREATE_DMG_VERSION}.tar.gz"
-          echo "${CREATE_DMG_SHA256}  ${RUNNER_TEMP}/create-dmg.tar.gz" | shasum -a 256 -c -
-          tar -xzf "${RUNNER_TEMP}/create-dmg.tar.gz" -C "${RUNNER_TEMP}"
-          echo "CREATE_DMG=${RUNNER_TEMP}/create-dmg-${CREATE_DMG_VERSION}/create-dmg" >> "$GITHUB_ENV"
-
-      - name: Build DMG
-        run: ./automator.sh build packages
+          tests/run_smoke_test.sh "$APP/Contents/MacOS/PyMOL-Open-Source"
+          tests/run_smoke_test.sh --gui "$APP/Contents/MacOS/PyMOL-Open-Source"
+          codesign --verify --deep "$APP"
 
       - name: Verify DMG
         # Mounts the DMG like a user would and tests the app inside it
@@ -357,8 +356,8 @@ jobs:
           test "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")" = "io.github.kullik01.pymol-open-source"
           # File types (.pdb, .cif, .pse) that open with PyMOL in Finder
           test "$(plutil -extract UTExportedTypeDeclarations.0.UTTypeIdentifier raw "$APP/Contents/Info.plist")" = "io.github.kullik01.pymol-open-source.pse"
-          # PyMOL is built for this runner's architecture (build_dmg.sh checks that Qt and numpy match it)
-          test "$(lipo -archs "$APP"/Contents/Resources/lib/pymol/_cmd.*.so)" = "${{ matrix.arch }}"
+          # PyMOL is built for this runner's architecture (app_checks_test checks every binary)
+          test "$(lipo -archs "$APP"/Contents/Resources/runtime/lib/python3.13/site-packages/pymol/_cmd.*.so)" = "${{ matrix.arch }}"
           tests/run_smoke_test.sh "$APP/Contents/MacOS/PyMOL-Open-Source"
 
       - name: Upload artifact

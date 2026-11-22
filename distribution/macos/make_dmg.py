@@ -40,7 +40,9 @@ def cmd_architectures(app: pathlib.Path) -> list[str]:
     )
   )
   if len(tmp_found) != 1:
-    raise FileNotFoundError(f"expected one pymol/_cmd.*.so in {app}, found {tmp_found}")
+    raise FileNotFoundError(
+      f"expected one pymol/_cmd.*.so in {app}, found {tmp_found}"
+    )
   return macho.architectures(tmp_found[0])
 
 

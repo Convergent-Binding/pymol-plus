@@ -54,7 +54,9 @@ def _fat(*images: tuple[int, bytes]) -> bytes:
   tmp_offset = 4096
   tmp_body = b""
   for tmp_cpu, tmp_image in images:
-    tmp_header += struct.pack(">IIIII", tmp_cpu, 0, tmp_offset, len(tmp_image), 12)
+    tmp_header += struct.pack(
+      ">IIIII", tmp_cpu, 0, tmp_offset, len(tmp_image), 12
+    )
     tmp_body += tmp_image + b"\0" * (-len(tmp_image) % 4096)
     tmp_offset += len(tmp_image) + (-len(tmp_image) % 4096)
   return tmp_header + b"\0" * (4096 - len(tmp_header)) + tmp_body
@@ -89,7 +91,9 @@ class MachoTest(unittest.TestCase):
   def test_thin_extracts_slice(self) -> None:
     """The arm64 slice of a universal file comes out byte for byte."""
     tmp_arm = _thin(_ARM64, (11, 0))
-    tmp_path = self._file("QtCore", _fat((_X86_64, _thin(_X86_64, (10, 15))), (_ARM64, tmp_arm)))
+    tmp_path = self._file(
+      "QtCore", _fat((_X86_64, _thin(_X86_64, (10, 15))), (_ARM64, tmp_arm))
+    )
 
     self.assertEqual(macho.thin(tmp_path, "arm64"), tmp_arm)
 
@@ -123,7 +127,9 @@ class MachoTest(unittest.TestCase):
     """A universal file needs what its most demanding slice needs."""
     tmp_path = self._file(
       "c.so",
-      _fat((_X86_64, _thin(_X86_64, (10, 15))), (_ARM64, _thin(_ARM64, (12, 0)))),
+      _fat(
+        (_X86_64, _thin(_X86_64, (10, 15))), (_ARM64, _thin(_ARM64, (12, 0)))
+      ),
     )
 
     self.assertEqual(macho.minimum_macos(tmp_path), (12, 0))
@@ -132,7 +138,9 @@ class MachoTest(unittest.TestCase):
     """A universal file lists each slice's architecture."""
     tmp_path = self._file(
       "d.so",
-      _fat((_X86_64, _thin(_X86_64, (10, 15))), (_ARM64, _thin(_ARM64, (11, 0)))),
+      _fat(
+        (_X86_64, _thin(_X86_64, (10, 15))), (_ARM64, _thin(_ARM64, (11, 0)))
+      ),
     )
 
     self.assertEqual(macho.architectures(tmp_path), ["x86_64", "arm64"])

@@ -45,7 +45,12 @@ distribution/README.md.
   the installer (Inno Setup 7 installed); `//distribution/bundle` is the app folder
 - `bazel test //distribution/...`: the app's tests, a moved copy's headless smoke test included
 
-**App commands, macOS and Linux** (in `distribution/`, still cx_Freeze):
+**App commands, macOS** (anywhere in the repository, on a Mac):
+- `bazel build //distribution/macos:dmg`: `PyMOL-Open-Source.app` for this Mac's architecture,
+  signed ad hoc (`//distribution/macos:signed_app`), and its DMG
+- `bazel test //distribution/...`: also checks every binary's architecture and macOS 12 minimum
+
+**App commands, Linux** (in `distribution/`, still cx_Freeze):
 - `./automator.sh setup`: fresh `.venv` with the Python of `.python-version` and `requirements.txt` (uv)
 - `./automator.sh build app` / `build packages` / `build all`; `./automator.sh test` / `test gui`
 - `uvx pre-commit run --all-files`: ruff, shellcheck, actionlint (the CI job "checks")

@@ -42,7 +42,9 @@ def _universal(*images: bytes) -> bytes:
   tmp_offset = 4096
   for tmp_image in images:
     tmp_cpu = struct.unpack_from("<I", tmp_image, 4)[0]
-    tmp_header += struct.pack(">IIIII", tmp_cpu, 0, tmp_offset, len(tmp_image), 12)
+    tmp_header += struct.pack(
+      ">IIIII", tmp_cpu, 0, tmp_offset, len(tmp_image), 12
+    )
     tmp_body += tmp_image.ljust(4096, b"\0")
     tmp_offset += 4096
   return tmp_header.ljust(4096, b"\0") + tmp_body
@@ -86,20 +88,22 @@ class MakeAppTest(unittest.TestCase):
     Returns:
       Its Contents folder.
     """
-    tmp_status = make_app.main([
-      "--app",
-      str(self.app),
-      "--info-plist",
-      str(self.plist),
-      "--icon",
-      str(self.icon),
-      "--version",
-      "3.2.0.3+1",
-      "--arch",
-      "arm64",
-      "--out",
-      str(self.out),
-    ])
+    tmp_status = make_app.main(
+      [
+        "--app",
+        str(self.app),
+        "--info-plist",
+        str(self.plist),
+        "--icon",
+        str(self.icon),
+        "--version",
+        "3.2.0.3+1",
+        "--arch",
+        "arm64",
+        "--out",
+        str(self.out),
+      ]
+    )
     self.assertEqual(tmp_status, 0)
     return self.out / "Contents"
 
@@ -116,7 +120,9 @@ class MakeAppTest(unittest.TestCase):
       tmp_contents / "PkgInfo",
     ):
       self.assertTrue(tmp_path.is_file(), tmp_path)
-    self.assertFalse((tmp_contents / "Resources" / "PyMOL-Open-Source").exists())
+    self.assertFalse(
+      (tmp_contents / "Resources" / "PyMOL-Open-Source").exists()
+    )
 
   def test_plist_version_stamped_and_keys_kept(self) -> None:
     """The version is set; every other key stays as Info.plist has it."""
