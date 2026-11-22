@@ -428,6 +428,13 @@ jobs:
           rpm -qpi os_specific/dist/*.rpm
           rpm -qpR os_specific/dist/*.rpm
           rpm -qpl os_specific/dist/*.rpm | grep -v '/opt/' || true
+          # Only the declared requirements, and no bundled library provided
+          if rpm -qpR os_specific/dist/*.rpm | grep -E 'libQt|libgomp|libpython|libpyside|libshiboken'; then
+            echo "The rpm requires libraries generated from its own files"; exit 1
+          fi
+          if rpm -qp --provides os_specific/dist/*.rpm | grep -F '.so'; then
+            echo "The rpm provides its bundled libraries"; exit 1
+          fi
 
       - name: Smoke test
         # From the extracted tarball; the package tests below install the .deb and .rpm

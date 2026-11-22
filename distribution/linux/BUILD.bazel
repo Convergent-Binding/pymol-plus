@@ -239,6 +239,12 @@ pkg_rpm(
         "__spec_install_post": "%{nil}",
         "__os_install_post": "%{nil}",
         "debug_package": "%{nil}",
+        # No dependencies generated from the app's own files, as fpm
+        # (AutoReqProv: no): it requires only the declared libraries, not
+        # those of PySide6 parts it never loads, and provides none of its
+        # bundled ones to other packages.
+        "__requires_exclude_from": "^/opt/.*$",
+        "__provides_exclude_from": "^/opt/.*$",
     },
     description = _DESCRIPTION,
     group = "science",
