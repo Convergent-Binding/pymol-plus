@@ -37,6 +37,9 @@ def _app_bundle_impl(ctx):
         for f in target.files.to_list():
             args.add("--overlay", "{}={}".format(f.path, destination))
     args.add("--launcher", ctx.executable.launcher)
+    for target, destination in ctx.attr.bundle_files.items():
+        for f in target.files.to_list():
+            args.add("--bundle-file", "{}={}".format(f.path, destination))
     for f in ctx.files.runtime_trees:
         args.add("--runtime-tree", f.path)
     for source, destination in ctx.attr.runtime_from_site_packages.items():
@@ -61,7 +64,8 @@ def _app_bundle_impl(ctx):
         outputs = [out],
         inputs = depset(
             runtime_files + ctx.files.overlays + ctx.files.licenses +
-            ctx.files.runtime_trees + ctx.files.license_trees + [
+            ctx.files.runtime_trees + ctx.files.license_trees +
+            ctx.files.bundle_files + [
                 ctx.file.site_packages,
                 ctx.file.wheel,
                 ctx.executable.launcher,
@@ -83,6 +87,11 @@ app_bundle = rule(
     implementation = _app_bundle_impl,
     cfg = _app_python_transition,
     attrs = {
+        "bundle_files": attr.label_keyed_string_dict(
+            allow_files = True,
+            doc = "Files copied into the app folder at the paths given, " +
+                  "such as the Linux libraries the system may lack.",
+        ),
         "distributions": attr.string_list(
             mandatory = True,
             doc = "The bundled distributions whose licenses go into licenses/.",

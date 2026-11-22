@@ -84,6 +84,16 @@ config_setting(
 # prints its path.
 app_bundle(
     name = "bundle",
+    # Linux: the libraries a minimal system lacks, which cx_Freeze copied in:
+    # OpenMP for _cmd, loaded by pymol_app_start, and Qt's X11 cursor
+    # library beside Qt's, where its xcb plugin's $ORIGIN path finds it.
+    bundle_files = select({
+        "@platforms//os:linux": {
+            "@gomp_linux//:libgomp": "runtime/lib/libgomp.so.1",
+            "//distribution/linux:libxcb_cursor": "runtime/lib/python3.13/site-packages/PySide6/Qt/lib/libxcb-cursor.so.0",
+        },
+        "//conditions:default": {},
+    }),
     distributions = [
         "pymol-open-source-whl",
         "PySide6-Essentials",
@@ -112,7 +122,11 @@ app_bundle(
     } | select({
         "@platforms//os:windows": {"//distribution:os_specific/windows/splash.png": "pymol/data/pymol/splash.png"},
         "@platforms//os:macos": {"//distribution:os_specific/macos/splash.png": "pymol/data/pymol/splash.png"},
-        "//conditions:default": {"//distribution:os_specific/linux/splash.png": "pymol/data/pymol/splash.png"},
+        "//conditions:default": {
+            "//distribution:os_specific/linux/splash.png": "pymol/data/pymol/splash.png",
+            # The launcher's start module: the app's libgomp before PyMOL.
+            "//distribution/linux:app_start.py": "pymol_app_start.py",
+        },
     }),
     project_license = "//distribution:LICENSE",
     pyproject = "//distribution:pyproject.toml",

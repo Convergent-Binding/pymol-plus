@@ -21,13 +21,17 @@
  * prints "PyMOL-Open-Source: runtime not found: <path>" to stderr and exits
  * 127.
  *
- * On Linux it replaces itself with Python (execv). On Windows it is a GUI
- * program, so no console window opens; it starts pythonw.exe with the rest
- * of its own command line verbatim (no re-quoting), hands on its standard
- * handles, so `-cq` output still reaches a pipe, and waits. On macOS it loads
- * <root>/runtime/lib/libpython3.X.dylib and runs PyMOL in its own process,
- * with the same isolation: macOS shows a process as an app only while its
- * executable is the bundle's own, for the Dock icon and the app menu.
+ * On Linux it replaces itself with Python (execv), with bytecode in the
+ * user's cache (-X pycache_prefix), as the packages install into /opt,
+ * which users cannot write, and runs pymol_app_start instead, which loads
+ * the app's own libgomp before it runs pymol.startup_wrapper. On Windows it
+ * is a GUI program, so no console window opens; it starts pythonw.exe with
+ * the rest of its own command line verbatim (no re-quoting), hands on its
+ * standard handles, so `-cq` output still reaches a pipe, and waits. On
+ * macOS it loads <root>/runtime/lib/libpython3.X.dylib and runs PyMOL in its
+ * own process, with the same isolation: macOS shows a process as an app only
+ * while its executable is the bundle's own, for the Dock icon and the app
+ * menu.
  *
  * @copyright Copyright (c) 2026, Hannah Kullik.
  * SPDX-License-Identifier: BSD-3-Clause
@@ -360,16 +364,30 @@ int main(int argc, char** argv)
   }
   setenv("PYMOL_APP_ROOT", root, 1);
 
-  char** arguments = calloc((size_t) argc + 4, sizeof(char*));
+  const char* cache_home = getenv("XDG_CACHE_HOME");
+  const char* user_home = getenv("HOME");
+  char pycache[PATH_MAX + 64];
+  if(cache_home != NULL && cache_home[0] == '/') {
+    snprintf(pycache, sizeof(pycache),
+             "pycache_prefix=%s/PyMOL-Open-Source/pycache", cache_home);
+  } else {
+    snprintf(pycache, sizeof(pycache),
+             "pycache_prefix=%s/.cache/PyMOL-Open-Source/pycache",
+             user_home != NULL ? user_home : "/tmp");
+  }
+
+  char** arguments = calloc((size_t) argc + 6, sizeof(char*));
   if(arguments == NULL) {
     return RUNTIME_NOT_FOUND;
   }
   arguments[0] = python;
   arguments[1] = "-I";
-  arguments[2] = "-m";
-  arguments[3] = "pymol.startup_wrapper";
+  arguments[2] = "-X";
+  arguments[3] = pycache;
+  arguments[4] = "-m";
+  arguments[5] = "pymol_app_start";
   for(int i = 1; i < argc; ++i) {
-    arguments[i + 3] = argv[i];
+    arguments[i + 5] = argv[i];
   }
   execv(python, arguments);
   fprintf(stderr, "PyMOL-Open-Source: cannot start %s\n", python);

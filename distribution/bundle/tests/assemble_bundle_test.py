@@ -365,6 +365,35 @@ class AssembleBundleTest(unittest.TestCase):
     tmp_vc_license = tmp_out / "licenses" / "vc_redist" / "LICENSE.txt"
     self.assertEqual(tmp_vc_license.read_text(encoding="utf-8"), "eula")
 
+  def test_bundle_files(self) -> None:
+    """Extra files land at their paths in the app folder.
+
+    Linux: libgomp beside the runtime's libraries, libxcb-cursor beside Qt's.
+    """
+    tmp_gomp = _write(self.root / "gomp" / "libgomp.so.1", "gomp")
+    tmp_cursor = _write(self.root / "deb" / "libxcb-cursor.so.0", "cursor")
+    tmp_out = self.root / "out"
+
+    tmp_status, tmp_stderr = self._assemble(
+      tmp_out,
+      "--bundle-file",
+      f"{tmp_gomp}=runtime/lib/libgomp.so.1",
+      "--bundle-file",
+      f"{tmp_cursor}=runtime/lib/python3.13/site-packages/PySide6/Qt/lib/"
+      "libxcb-cursor.so.0",
+    )
+
+    self.assertEqual(tmp_status, 0, tmp_stderr)
+    self.assertEqual(
+      (tmp_out / "runtime" / "lib" / "libgomp.so.1").read_text(), "gomp"
+    )
+    tmp_qt_lib = tmp_out / "runtime" / "lib" / "python3.13" / "site-packages"
+    self.assertEqual(
+      (tmp_qt_lib / "PySide6" / "Qt" / "lib" / "libxcb-cursor.so.0")
+      .read_text(),
+      "cursor",
+    )
+
   def test_missing_site_packages_file_fails(self) -> None:
     """Copying a file that site-packages lacks stops the build, naming it."""
     tmp_status, tmp_stderr = self._assemble(

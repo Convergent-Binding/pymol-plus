@@ -50,11 +50,14 @@ distribution/README.md.
   signed ad hoc (`//distribution/macos:signed_app`), and its DMG
 - `bazel test //distribution/...`: also checks every binary's architecture and macOS 12 minimum
 
-**App commands, Linux** (in `distribution/`, still cx_Freeze):
-- `./automator.sh setup`: fresh `.venv` with the Python of `.python-version` and `requirements.txt` (uv)
-- `./automator.sh build app` / `build packages` / `build all`; `./automator.sh test` / `test gui`
+**App commands, Linux** (anywhere in the repository; release packages in the
+`quay.io/pypa/manylinux_2_28_x86_64` container for glibc 2.28):
+- `bazel build //distribution/linux:packages`: the .tar.gz, .deb and .rpm (`rpmbuild` installed)
+- `bazel test //distribution/...`: also checks every binary's libraries and glibc 2.28
+- Linux packages on 8 distributions: `distribution/tests/test_linux_package.sh <package>` in a container
+
+**App checks** (in `distribution/`):
 - `uvx pre-commit run --all-files`: ruff, shellcheck, actionlint (the CI job "checks")
-- Linux packages on 8 distributions: `tests/test_linux_package.sh <package>` in a container
 
 **Rules:**
 - Pull requests get the Bazel check only; the wheel matrix (`wheels.yaml`, 35-40 minutes) runs on

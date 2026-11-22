@@ -1,6 +1,7 @@
 #!/bin/sh
-# Runs after installing or updating the .deb/.rpm. Versions up to 3.1.0.4+4 did not
-# own their folder in /opt, so an update left their (empty) folders behind. Removes
+# Runs after installing or updating the .deb/.rpm, and after uninstalling the .rpm.
+# Versions up to 3.1.0.4+4 did not own their folder in /opt, so an update left their
+# (empty) folders behind; the .rpm owns its folder but not the subfolders. Removes
 # only empty folders, never files, and needs no tools beyond the shell and rmdir.
 remove_empty_folders() {
   for entry in "$1"/* "$1"/.[!.]*; do

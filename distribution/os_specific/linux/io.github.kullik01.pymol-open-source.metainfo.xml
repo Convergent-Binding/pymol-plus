@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- AppStream metadata: description and screenshot in software centers such as GNOME Software
-     and KDE Discover. build_packages.sh fills in @VERSION@ and @DATE@. -->
+     and KDE Discover. The Linux packages' build fills in the version and the commit date. -->
 <component type="desktop-application">
   <id>io.github.kullik01.pymol-open-source</id>
   <metadata_license>CC0-1.0</metadata_license>

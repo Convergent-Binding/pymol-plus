@@ -10,6 +10,11 @@ exports_files(
     [
         "LICENSE",
         "alternative_design/alt_logo.png",
+        "os_specific/linux/io.github.kullik01.pymol-open-source.metainfo.xml",
+        "os_specific/linux/pymol-open-source-256.png",
+        "os_specific/linux/pymol-open-source-mime.xml",
+        "os_specific/linux/pymol-open-source.desktop",
+        "os_specific/linux/remove_empty_old_folders.sh",
         "os_specific/linux/splash.png",
         "os_specific/macos/Info.plist",
         "os_specific/macos/dmg/dmg_background.svg",

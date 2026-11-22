@@ -52,13 +52,13 @@ The following information is about building a platform dependent package/setup f
 The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exactly these steps.
 
 ### Prerequisites
-- Windows and macOS: [Bazelisk](https://github.com/bazelbuild/bazelisk) and a C++ compiler, as
-  for the wheel (see the README at the repository root)
-- [uv](https://docs.astral.sh/uv/getting-started/installation/); it also installs the Python of `.python-version` if needed
+- [Bazelisk](https://github.com/bazelbuild/bazelisk) and a C++ compiler, as for the wheel (see the
+  README at the repository root)
+- For the quick checks: [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Windows: [Inno Setup 7](https://jrsoftware.org/isinfo.php) (default install location or `ISCC.exe` on the `PATH`)
-- Linux (**only** for building the .deb/.rpm packages): [fpm](https://fpm.readthedocs.io/) and `rpmbuild`
-  - Debian/Ubuntu: `sudo apt-get install ruby rpm && sudo gem install fpm`
-  - Fedora: `sudo dnf install ruby rpm-build && sudo gem install fpm`
+- Linux (**only** for the .rpm): `rpmbuild` (`rpm-build` on Fedora and RHEL, `rpm` on
+  Debian/Ubuntu). Release packages are built in the `quay.io/pypa/manylinux_2_28_x86_64`
+  container, so that they need at most glibc 2.28.
 
 ### Windows
 Bazel builds the app and its packages; run from anywhere in the repository:
@@ -77,34 +77,17 @@ bazel build //distribution/macos:dmg
 bazel test //distribution/...
 ```
 
-### Linux (step-by-step guide)
-Linux still builds with cx_Freeze until its Bazel build follows.
-1. Create the virtual environment `.venv` with all dependencies (`requirements.txt`, one file
-   for all platforms). Run it again after the requirements changed:
-   ```shell
-   ./automator.sh setup
-   ```
-2. Build the frozen application into the `dist` directory:
-   ```shell
-   ./automator.sh build app
-   ```
-   | Platform      | Output                                         |
-   |---------------|------------------------------------------------|
-   | Windows/Linux | `dist/exe.<platform>-<Python version>/`        |
-   | macOS         | `dist/PyMOL-Open-Source.app`                   |
-3. Check the build with the smoke test (`test gui` also starts the Qt GUI):
-   ```shell
-   ./automator.sh test
-   ```
-4. Create the installer/packages of your platform in `os_specific/dist` (Windows: Inno Setup
-   installer; Linux: .tar.gz, .deb and .rpm; macOS: DMG):
-   ```shell
-   ./automator.sh build packages
-   ```
-   The DMG name tells the architecture of the built app (`_macOS_AppleSilicon.dmg` or
-   `_macOS_Intel.dmg`); on a Mac it is the architecture of the Python used for the build.
+### Linux
+Bazel builds the app and its .tar.gz, .deb and .rpm:
+```shell
+bazel build //distribution/linux:packages
+bazel test //distribution/...
+```
+The packages install on eight distributions in CI
+(`tests/test_linux_package.sh <package>` in a container, as root).
 
-`./automator.sh build all` runs steps 2 and 4 in one go.
+The cx_Freeze build (`automator.sh`, `requirements.txt`) is no longer used and goes with
+the cleanup of the Bazel migration.
 
 ### Quick checks
 The CI job "checks" lints the Python code (ruff), the shell scripts (shellcheck) and the
