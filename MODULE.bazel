@@ -26,6 +26,21 @@ bazel_dep(name = "bazel_skylib", version = "1.8.2")
 pyproject = use_extension("//tools/bazel:pyproject_repo.bzl", "pyproject")
 use_repo(pyproject, "pymol_project_metadata")
 
+# The app's name and version (distribution/pyproject.toml), which the Windows
+# packages' file names carry; see //distribution/windows.
+app_project_metadata = use_repo_rule("//tools/bazel:pyproject_repo.bzl", "pyproject_metadata")
+
+app_project_metadata(
+    name = "app_project_metadata",
+    src = "//distribution:pyproject.toml",
+    wheel = False,
+)
+
+# Inno Setup 7's compiler on this machine, for //distribution/windows:installer.
+inno_setup = use_repo_rule("//distribution/windows:inno_setup_repo.bzl", "inno_setup")
+
+inno_setup(name = "inno_setup")
+
 # One toolchain per CPython version the wheels are built for. 3.10, the
 # `requires-python` floor, is the default, so an invocation that names no
 # version builds the oldest supported one. Select another per invocation with

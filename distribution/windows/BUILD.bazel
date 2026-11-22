@@ -1,7 +1,10 @@
 # The Windows packages of the app: the C++ runtime it bundles, the portable
 # ZIP and the Inno Setup installer.
 
-load("@rules_python//python:defs.bzl", "py_binary", "py_library")
+load("@app_project_metadata//:metadata.bzl", "VERSION")
+load("@inno_setup//:defs.bzl", "ISCC_FOUND")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load(":inno_setup.bzl", "inno_setup_installer", "portable_zip")
 load(":msvc_runtime.bzl", "msvc_runtime")
 
 # Reads PE import tables, for the tests that check the bundled runtimes.
@@ -48,4 +51,52 @@ filegroup(
     output_group = "license",
     target_compatible_with = ["@platforms//os:windows"],
     visibility = ["//distribution:__subpackages__"],
+)
+
+py_binary(
+    name = "make_zip",
+    srcs = ["make_zip.py"],
+    python_version = "3.13",
+)
+
+py_binary(
+    name = "run_iscc",
+    srcs = ["run_iscc.py"],
+    python_version = "3.13",
+)
+
+# The portable ZIP: the app folder's contents at its root, under the release
+# name PyMOL-Open-Source_v<version>_x64_portable.zip.
+portable_zip(
+    name = "portable_zip",
+    app = "//distribution/bundle",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+py_test(
+    name = "portable_zip_test",
+    size = "small",
+    srcs = ["tests/portable_zip_test.py"],
+    args = [
+        "$(rootpath :portable_zip)",
+        VERSION,
+    ],
+    data = [":portable_zip"],
+    legacy_create_init = False,
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+# The installer, PyMOL-Open-Source_v<version>_x64_setup.exe. Manual: it needs
+# Inno Setup 7 on this machine (@inno_setup).
+inno_setup_installer(
+    name = "installer",
+    app = "//distribution/bundle",
+    iscc = "@inno_setup//:ISCC.exe" if ISCC_FOUND else None,
+    script = "//distribution:os_specific/windows/inno_setup/setup.iss",
+    script_files = [
+        "//distribution:os_specific/windows/inno_setup/LICENSE.txt",
+        "//distribution:os_specific/windows/logo.ico",
+    ],
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:windows"],
 )
