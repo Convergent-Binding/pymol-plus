@@ -1,4 +1,4 @@
-"""macho reads Mach-O architectures and minimum macOS, and thins universal files.
+"""macho reads Mach-O architectures and minimum macOS, thins universal files.
 
 The fixtures are built here: minimal 64-bit Mach-O images with one load
 command each, and universal (fat) files holding two of them.
@@ -144,6 +144,14 @@ class MachoTest(unittest.TestCase):
     )
 
     self.assertEqual(macho.architectures(tmp_path), ["x86_64", "arm64"])
+
+  def test_truncated_universal_header_is_not_macho(self) -> None:
+    """A file cut off inside its slice table is no Mach-O, not a crash."""
+    tmp_path = self._file(
+      "cut.so", struct.pack(">II", 0xCAFEBABE, 2) + bytes(8)
+    )
+
+    self.assertFalse(macho.is_macho(tmp_path))
 
   def test_other_files_are_not_macho(self) -> None:
     """Text and a Java class file (also 0xCAFEBABE) are no Mach-O."""

@@ -82,7 +82,7 @@ Both `build-macos` jobs in `build_app.yaml` build the DMG with Bazel and pass ev
 
 **Files:** Modify `.bazelrc`.
 
-- [ ] **Step 1:** `build:macos --@rules_python//python/config_settings:pip_whl_osx_version=12.0`, with a comment naming `LSMinimumSystemVersion`.
+- [ ] **Step 1:** `build:macos --@rules_python//python/config_settings:pip_whl_osx_version=12.0`, with a comment naming `LSMinimumSystemVersion`. *(Dropped after review: in rules_python 2.3.2 the flag feeds environment markers only, and wheel selection already prefers the lowest macOS; `app_checks_test` holds the floor.)*
 - [ ] **Step 2: Verify** with Task 3's `macos_min_version_test` (the failing case is numpy's `macosx_14_0_arm64` wheel without the flag).
 - [ ] **Step 3: Commit** with Task 3.
 

@@ -53,6 +53,9 @@ def _fat_slices(data: bytes) -> list[tuple[str, int, int]] | None:
     return None
   if not 0 < tmp_count <= _MAX_FAT_SLICES:
     return None
+  tmp_entry_size = 20 if tmp_magic == _FAT_MAGIC else 32
+  if len(data) < 8 + tmp_count * tmp_entry_size:
+    return None
   tmp_slices = []
   tmp_entry = 8
   for _ in range(tmp_count):

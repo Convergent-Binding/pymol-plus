@@ -235,10 +235,6 @@ pip.parse(
 
 use_repo(pip, "app_build_pip")
 
-# The Microsoft C++ and OpenMP runtimes the Windows app bundles, from the
-# Visual C++ Redistributable cx_Freeze used (https://aka.ms/vs/17/release/
-# vc_redist.x64.exe), pinned: Microsoft's permanent URL of the 2026-11-07
-# release names its SHA-256. See //distribution/windows:msvc_runtime.
 # create-dmg, which writes the macOS app's DMG (//distribution/macos:dmg),
 # pinned at the version and checksum build_app.yaml used.
 http_archive(
@@ -259,6 +255,10 @@ filegroup(
 
 http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
+# The Microsoft C++ and OpenMP runtimes the Windows app bundles, from the
+# Visual C++ Redistributable cx_Freeze used (https://aka.ms/vs/17/release/
+# vc_redist.x64.exe), pinned: Microsoft's permanent URL of the 2026-11-07
+# release names its SHA-256. See //distribution/windows:msvc_runtime.
 http_file(
     name = "vc_redist",
     downloaded_file_path = "VC_redist.x64.exe",

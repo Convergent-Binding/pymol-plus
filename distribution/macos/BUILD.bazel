@@ -95,6 +95,22 @@ py_binary(
     python_version = "3.13",
 )
 
+py_library(
+    name = "make_dmg_lib",
+    srcs = ["make_dmg.py"],
+    imports = ["."],
+    deps = [":macho"],
+)
+
+py_test(
+    name = "make_dmg_test",
+    size = "small",
+    srcs = ["tests/make_dmg_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":make_dmg_lib"],
+)
+
 py_binary(
     name = "make_dmg",
     srcs = ["make_dmg.py"],

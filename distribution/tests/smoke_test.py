@@ -105,6 +105,22 @@ def check_macos_bundle_executable() -> None:
   )
 
 
+def check_macos_python_settings() -> None:
+  """The macOS launcher runs Python in UTF-8 mode, bytecode outside the app.
+
+  The app starts from the Finder without LANG, where Python would otherwise
+  read files as ASCII; bytecode written into the signed app would break its
+  signature.
+  """
+  if sys.platform != "darwin" or not os.environ.get("PYMOL_APP_ROOT"):
+    return
+  assert sys.flags.utf8_mode == 1, "Python runs without UTF-8 mode"
+  tmp_prefix = sys.pycache_prefix or ""
+  assert tmp_prefix.endswith("/Library/Caches/PyMOL-Open-Source/pycache"), (
+    f"bytecode goes to {tmp_prefix!r}"
+  )
+
+
 def check_app_user_model_id() -> None:
   """The Windows process carries the app's AppUserModelID.
 
@@ -187,6 +203,7 @@ try:
   check_licenses()
   check_app_user_model_id()
   check_macos_bundle_executable()
+  check_macos_python_settings()
   check_certificates()
   with tempfile.TemporaryDirectory() as tmp_dir:
     check_commands(tmp_dir)

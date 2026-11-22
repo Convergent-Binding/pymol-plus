@@ -2,14 +2,20 @@
 
 The window layout is the one build_dmg.sh used. The DMG's architecture label
 must match the app's own: it is checked against PyMOL's _cmd extension, as
-build_dmg.sh did with lipo. create-dmg sometimes fails on CI runners with
-"Resource busy", so it gets three attempts.
+build_dmg.sh did with lipo. create-dmg copies a source folder into a disk
+image and then writes there, so it gets a writable copy of the app, alone in
+a staging folder: Bazel leaves the signed app read-only. Permissions are not
+part of the code signature. create-dmg sometimes fails on CI runners with
+"Resource busy"; only that failure is tried again, up to three times.
 """
 
 import argparse
 import pathlib
+import shutil
+import stat
 import subprocess
 import sys
+import tempfile
 import time
 
 import macho
@@ -46,6 +52,24 @@ def cmd_architectures(app: pathlib.Path) -> list[str]:
   return macho.architectures(tmp_found[0])
 
 
+def stage_app(app: pathlib.Path, staging: pathlib.Path) -> pathlib.Path:
+  """Copies the app, writable, into a staging folder of its own.
+
+  Args:
+    app: The signed .app.
+    staging: The folder to create; it holds only the copy.
+
+  Returns:
+    The copy's path.
+  """
+  tmp_copy = staging / app.name
+  shutil.copytree(app, tmp_copy, symlinks=True)
+  for tmp_path in [tmp_copy, *tmp_copy.rglob("*")]:
+    if not tmp_path.is_symlink():
+      tmp_path.chmod(tmp_path.stat().st_mode | stat.S_IWUSR)
+  return tmp_copy
+
+
 def main(argv: list[str]) -> int:
   """Writes the DMG.
 
@@ -72,6 +96,39 @@ def main(argv: list[str]) -> int:
     )
     return 1
   tmp_volume = tmp_out.stem
+  tmp_staging = pathlib.Path(tempfile.mkdtemp(prefix="pymol-dmg-"))
+  try:
+    return _write_dmg(
+      stage_app(tmp_app, tmp_staging / "source"),
+      tmp_arguments,
+      tmp_volume,
+      tmp_out,
+    )
+  finally:
+    shutil.rmtree(tmp_staging, ignore_errors=True)
+
+
+def _write_dmg(
+  app: pathlib.Path,
+  arguments: argparse.Namespace,
+  volume: str,
+  out: pathlib.Path,
+) -> int:
+  """Runs create-dmg on the staged app's folder.
+
+  Args:
+    app: The staged, writable .app.
+    arguments: The command line, for the create-dmg script and background.
+    volume: The disk image's volume name.
+    out: The DMG to write.
+
+  Returns:
+    0 when the DMG is written, 1 otherwise.
+  """
+  tmp_app = app
+  tmp_arguments = arguments
+  tmp_volume = volume
+  tmp_out = out
   tmp_command = [
     "bash",
     tmp_arguments.create_dmg,
@@ -95,7 +152,7 @@ def main(argv: list[str]) -> int:
     "500",
     "185",
     str(tmp_out),
-    str(tmp_app.resolve()),
+    str(tmp_app.parent),
   ]
   for tmp_attempt in range(1, _ATTEMPTS + 1):
     subprocess.run(
@@ -106,9 +163,19 @@ def main(argv: list[str]) -> int:
     tmp_out.unlink(missing_ok=True)
     for tmp_partial in tmp_out.parent.glob("rw.*.dmg"):
       tmp_partial.unlink()
-    if subprocess.run(tmp_command, check=False).returncode == 0:
+    tmp_result = subprocess.run(
+      tmp_command,
+      stdout=subprocess.PIPE,
+      stderr=subprocess.STDOUT,
+      text=True,
+      check=False,
+    )
+    print(tmp_result.stdout, end="")
+    if tmp_result.returncode == 0:
       return 0
     print(f"make_dmg: create-dmg attempt {tmp_attempt} failed", file=sys.stderr)
+    if "Resource busy" not in tmp_result.stdout:
+      return 1
     if tmp_attempt < _ATTEMPTS:
       time.sleep(10)
   return 1

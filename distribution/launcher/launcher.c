@@ -187,6 +187,8 @@ static int find_launcher_folder(char folder[PATH_MAX])
 
 /** The CPython functions the macOS launcher looks up in libpython. */
 typedef struct {
+  void (*init_isolated_pre_config)(PyPreConfig*);
+  PyStatus (*pre_initialize)(const PyPreConfig*);
   void (*init_isolated_config)(PyConfig*);
   PyStatus (*set_string)(PyConfig*, wchar_t**, const wchar_t*);
   PyStatus (*set_bytes_argv)(PyConfig*, Py_ssize_t, char* const*);
@@ -228,6 +230,9 @@ static int find_root(const char* folder, char root[PATH_MAX])
  */
 static int load_python_api(void* library, python_api* api)
 {
+  api->init_isolated_pre_config =
+      dlsym(library, "PyPreConfig_InitIsolatedConfig");
+  api->pre_initialize = dlsym(library, "Py_PreInitialize");
   api->init_isolated_config = dlsym(library, "PyConfig_InitIsolatedConfig");
   api->set_string = dlsym(library, "PyConfig_SetString");
   api->set_bytes_argv = dlsym(library, "PyConfig_SetBytesArgv");
@@ -237,16 +242,23 @@ static int load_python_api(void* library, python_api* api)
   api->config_clear = dlsym(library, "PyConfig_Clear");
   api->run_main = dlsym(library, "Py_RunMain");
   api->decode_locale = dlsym(library, "Py_DecodeLocale");
-  return api->init_isolated_config && api->set_string && api->set_bytes_argv &&
-                 api->initialize_from_config && api->status_exception &&
-                 api->exit_status_exception && api->config_clear &&
-                 api->run_main && api->decode_locale
+  return api->init_isolated_pre_config && api->pre_initialize &&
+                 api->init_isolated_config && api->set_string &&
+                 api->set_bytes_argv && api->initialize_from_config &&
+                 api->status_exception && api->exit_status_exception &&
+                 api->config_clear && api->run_main && api->decode_locale
              ? 0
              : -1;
 }
 
 /**
  * Runs PyMOL in this process with the runtime under root.
+ *
+ * Like `python -I`: isolated from PYTHON* variables and the user's
+ * site-packages, in UTF-8 mode, which an isolated pre-configuration leaves
+ * off; an app started from the Finder has no LANG and would read files as
+ * ASCII without it. Bytecode goes to ~/Library/Caches/PyMOL-Open-Source, as
+ * writing into the signed app would break its signature.
  *
  * @param api The CPython functions.
  * @param root The app root.
@@ -257,20 +269,36 @@ static int load_python_api(void* library, python_api* api)
 static int run_python(const python_api* api, const char* root, int argc,
                       char** argv)
 {
+  PyPreConfig pre_config;
+  api->init_isolated_pre_config(&pre_config);
+  pre_config.utf8_mode = 1;
+  PyStatus status = api->pre_initialize(&pre_config);
+  if(api->status_exception(status)) {
+    api->exit_status_exception(status);
+  }
   char home[PATH_MAX + 16];
   snprintf(home, sizeof(home), "%s/runtime", root);
+  const char* user_home = getenv("HOME");
+  char cache[PATH_MAX + 64];
+  snprintf(cache, sizeof(cache), "%s/Library/Caches/PyMOL-Open-Source/pycache",
+           user_home ? user_home : "/tmp");
+
   wchar_t* wide_home = api->decode_locale(home, NULL);
-  if(wide_home == NULL) {
-    fprintf(stderr, "PyMOL-Open-Source: cannot decode %s\n", home);
+  wchar_t* wide_cache = api->decode_locale(cache, NULL);
+  if(wide_home == NULL || wide_cache == NULL) {
+    fprintf(stderr, "PyMOL-Open-Source: cannot decode %s or %s\n", home, cache);
     return RUNTIME_NOT_FOUND;
   }
   PyConfig config;
   api->init_isolated_config(&config);
-  /* Like the python command: Ctrl+C and the C streams behave as usual. */
+  /** Like the python command: Ctrl+C and the C streams behave as usual. */
   config.install_signal_handlers = 1;
   config.configure_c_stdio = 1;
   config.parse_argv = 0;
-  PyStatus status = api->set_string(&config, &config.home, wide_home);
+  status = api->set_string(&config, &config.home, wide_home);
+  if(!api->status_exception(status)) {
+    status = api->set_string(&config, &config.pycache_prefix, wide_cache);
+  }
   if(!api->status_exception(status)) {
     status =
         api->set_string(&config, &config.run_module, L"pymol.startup_wrapper");
@@ -302,7 +330,7 @@ int main(int argc, char** argv)
   snprintf(library_path, sizeof(library_path),
            "%s/runtime/lib/libpython%d.%d.dylib", root, PY_MAJOR_VERSION,
            PY_MINOR_VERSION);
-  /* RTLD_GLOBAL: extension modules find CPython's symbols in this image. */
+  /** RTLD_GLOBAL: extension modules find CPython's symbols in this image. */
   void* library = dlopen(library_path, RTLD_NOW | RTLD_GLOBAL);
   python_api api;
   if(library == NULL || load_python_api(library, &api) != 0) {

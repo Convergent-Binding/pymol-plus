@@ -144,7 +144,9 @@ class LauncherTest(unittest.TestCase):
       "PyMOL-Open-Source: runtime not found:", tmp_result.stderr.decode("utf-8")
     )
 
-  def _run_unloadable(self, launcher: pathlib.Path, runtime: pathlib.Path) -> str:
+  def _run_unloadable(
+    self, launcher: pathlib.Path, runtime: pathlib.Path
+  ) -> str:
     """Runs a launcher beside a runtime whose libpython does not load.
 
     Args:
