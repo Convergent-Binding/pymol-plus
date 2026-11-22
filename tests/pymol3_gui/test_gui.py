@@ -177,3 +177,130 @@ def test_unknown_area_raises_value_error(main_window, area):
   for tmp_name in ("left", "right", "top", "bottom"):
     assert tmp_name in str(tmp_raised.value)
   assert gui.get_dock_panel("Sequences") is None
+
+
+def _plugin_panels_actions(window) -> list:
+  """Lists the entries of Display's Plugin Panels submenu.
+
+  Args:
+    window: The window PyMOL returns.
+
+  Returns:
+    One list per Plugin Panels submenu, each with its actions.
+  """
+  return [
+      tmp_action.menu().actions()
+      for tmp_action in window.menudict["Display"].actions()
+      if tmp_action.menu() is not None
+      and tmp_action.text() == "Plugin Panels"
+  ]
+
+
+def test_panel_has_checkable_entry_under_plugin_panels(main_window):
+  """Display > Plugin Panels gets a checked entry that hides the panel.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  [tmp_actions] = _plugin_panels_actions(main_window)
+  [tmp_entry] = tmp_actions
+  assert tmp_entry.text() == "Sequences"
+  assert tmp_entry.isCheckable()
+  assert tmp_entry.isChecked()
+  tmp_entry.trigger()
+  assert not tmp_panel.is_visible()
+
+
+def test_close_button_hides_and_menu_unchecks(main_window):
+  """Closing the dock hides the panel, unchecks it and keeps it.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  [[tmp_entry]] = _plugin_panels_actions(main_window)
+  tmp_panel.dock_widget.close()
+  assert not tmp_panel.is_visible()
+  assert not tmp_entry.isChecked()
+  assert gui.get_dock_panel("Sequences") is tmp_panel
+  tmp_panel.show()
+  assert tmp_entry.isChecked()
+
+
+def test_one_submenu_for_many_panels(main_window):
+  """Two panels share one Plugin Panels submenu.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  gui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts", area="left")
+  [tmp_actions] = _plugin_panels_actions(main_window)
+  assert [tmp_action.text() for tmp_action in tmp_actions] == [
+      "Sequences",
+      "Contacts",
+  ]
+
+
+def test_remove_takes_entry_away(main_window):
+  """remove() takes the panel's entry out of the submenu.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel.remove()
+  [tmp_actions] = _plugin_panels_actions(main_window)
+  assert "Sequences" not in [tmp_action.text() for tmp_action in tmp_actions]
+
+
+def test_window_without_menudict_still_docks(bare_main_window):
+  """A window without PyMOL's menus still gets the panel.
+
+  Args:
+    bare_main_window: The window PyMOL returns, without menudict.
+  """
+  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  assert (
+      bare_main_window.dockWidgetArea(tmp_panel.dock_widget)
+      == _AREA.RightDockWidgetArea
+  )
+
+
+def test_second_panel_in_same_area_is_tabbed(main_window):
+  """A second panel in the same area joins the first as a tab.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_first = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_second = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts")
+  assert tmp_second.dock_widget in main_window.tabifiedDockWidgets(
+      tmp_first.dock_widget
+  )
+
+
+def test_panel_in_other_area_is_not_tabbed(main_window):
+  """Panels in different areas stay apart.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_first = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  gui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts", area="left")
+  assert main_window.tabifiedDockWidgets(tmp_first.dock_widget) == []
+
+
+def test_floating_panel_is_not_tabbed(main_window):
+  """A floating panel is not tabbed with a docked one.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_first = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_second = gui.add_dock_panel(
+      qt.QtWidgets.QLabel(), "Contacts", floating=True
+  )
+  assert tmp_second.dock_widget.isFloating()
+  assert main_window.tabifiedDockWidgets(tmp_first.dock_widget) == []

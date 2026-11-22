@@ -34,6 +34,9 @@ _AREA_NAMES = ("left", "right", "top", "bottom")
 _REGISTRY_ATTRIBUTE = "_pymol3_dock_panels"
 """The main window's attribute that maps panel ids to their panels."""
 
+_MENU_TITLE = "Plugin Panels"
+"""The submenu of PyMOL's Display menu that lists the panels."""
+
 
 class DockPanel:
   """A plugin's panel, docked in PyMOL's main window.
@@ -113,6 +116,9 @@ class DockPanel:
       return
     self._removed = True
     _registry(self._window).pop(self._panel_id, None)
+    tmp_menu = _plugin_panels_menu(self._window, create=False)
+    if tmp_menu is not None:
+      tmp_menu.removeAction(self._dock_widget.toggleViewAction())
     self._window.removeDockWidget(self._dock_widget)
     self._dock_widget.deleteLater()
 
@@ -166,6 +172,16 @@ def add_dock_panel(
   tmp_window.addDockWidget(tmp_area, tmp_dock_widget)
   if floating:
     tmp_dock_widget.setFloating(True)
+  else:
+    tmp_neighbour = _last_docked_panel(tmp_window, tmp_area)
+    if tmp_neighbour is not None:
+      tmp_window.tabifyDockWidget(tmp_neighbour.dock_widget, tmp_dock_widget)
+  tmp_menu = _plugin_panels_menu(tmp_window, create=True)
+  if tmp_menu is not None:
+    tmp_menu.addAction(tmp_dock_widget.toggleViewAction())
+  # Shown at once rather than at the window's next layout pass, so the menu
+  # entry is checked and the panel counts as visible from the start.
+  tmp_dock_widget.show()
   tmp_panel = DockPanel(tmp_panel_id, tmp_dock_widget, tmp_window)
   tmp_panels[tmp_panel_id] = tmp_panel
   return tmp_panel
@@ -200,6 +216,59 @@ def _registry(window: QtWidgets.QMainWindow) -> dict[str, DockPanel]:
     tmp_panels = {}
     setattr(window, _REGISTRY_ATTRIBUTE, tmp_panels)
   return tmp_panels
+
+
+def _last_docked_panel(
+    window: QtWidgets.QMainWindow,
+    area: QtCore.Qt.DockWidgetArea,
+) -> DockPanel | None:
+  """Finds the panel a new panel in the area is tabbed with.
+
+  Args:
+    window: PyMOL's main window.
+    area: The area the new panel docks in.
+
+  Returns:
+    The most recently added panel docked in the area, or None.
+  """
+  for tmp_panel in reversed(list(_registry(window).values())):
+    tmp_dock_widget = tmp_panel.dock_widget
+    if (
+        not tmp_dock_widget.isFloating()
+        and window.dockWidgetArea(tmp_dock_widget) == area
+    ):
+      return tmp_panel
+  return None
+
+
+def _plugin_panels_menu(
+    window: QtWidgets.QMainWindow, create: bool
+) -> QtWidgets.QMenu | None:
+  """Finds the Plugin Panels submenu of PyMOL's Display menu.
+
+  Args:
+    window: PyMOL's main window, whose ``menudict`` holds its menus.
+    create: Whether to add the submenu, after a separator, when missing.
+
+  Returns:
+    The submenu, or None when the window has no Display menu or the
+    submenu is missing and not to be made.
+  """
+  tmp_menus = getattr(window, "menudict", None)
+  if not isinstance(tmp_menus, dict) or "Display" not in tmp_menus:
+    return None
+  tmp_display = tmp_menus["Display"]
+  for tmp_action in tmp_display.actions():
+    if tmp_action.menu() is not None and tmp_action.text() == _MENU_TITLE:
+      return tmp_action.menu()
+  if not create:
+    return None
+  # The Display menu is the submenu's Qt parent and owner; a submenu that
+  # addMenu(title) makes would be deleted with its Python wrapper.
+  tmp_menu = _import_qt().QtWidgets.QMenu(_MENU_TITLE, tmp_display)
+  tmp_display.addSeparator()
+  tmp_display.addMenu(tmp_menu)
+  return tmp_menu
 
 
 def _dock_area(qt, area) -> QtCore.Qt.DockWidgetArea:
