@@ -168,10 +168,10 @@ jobs:
           ROOT="$(git rev-parse --show-toplevel)"
           mkdir -p os_specific/dist
           for TARGET in //distribution/windows:portable_zip //distribution/windows:installer; do
-            cp "$ROOT/$(bazel cquery --output=files "$TARGET")" os_specific/dist/
+            cp "$ROOT/$(bazel cquery --output=files "config($TARGET, target)")" os_specific/dist/
           done
           APP_DIR="$(cygpath -u "$RUNNER_TEMP")/app"
-          cp -r "$ROOT/$(bazel cquery --output=files //distribution/bundle)" "$APP_DIR"
+          cp -r "$ROOT/$(bazel cquery --output=files "config(//distribution/bundle, target)")" "$APP_DIR"
           echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
           ls -l os_specific/dist
 
@@ -322,10 +322,10 @@ jobs:
         run: |
           ROOT="$(git rev-parse --show-toplevel)"
           mkdir -p os_specific/dist
-          cp "$ROOT/$(bazel cquery --output=files //distribution/macos:dmg)" os_specific/dist/
+          cp "$ROOT/$(bazel cquery --output=files "config(//distribution/macos:dmg, target)")" os_specific/dist/
           APP_DIR="${RUNNER_TEMP}/app"
           mkdir -p "$APP_DIR"
-          cp -R "$ROOT/$(bazel cquery --output=files //distribution/macos:signed_app)" "$APP_DIR/"
+          cp -R "$ROOT/$(bazel cquery --output=files "config(//distribution/macos:signed_app, target)")" "$APP_DIR/"
           echo "APP=${APP_DIR}/PyMOL-Open-Source.app" >> "$GITHUB_ENV"
           ls -l os_specific/dist
 
@@ -422,7 +422,7 @@ jobs:
           ROOT="$(git rev-parse --show-toplevel)"
           mkdir -p os_specific/dist
           for TARGET in tarball deb rpm; do
-            cp "$ROOT/$(bazel cquery --output=files "//distribution/linux:$TARGET")" os_specific/dist/
+            cp "$ROOT/$(bazel cquery --output=files "config(//distribution/linux:$TARGET, target)")" os_specific/dist/
           done
           ls -l os_specific/dist
           rpm -qpi os_specific/dist/*.rpm
