@@ -121,6 +121,31 @@ def check_macos_python_settings() -> None:
   )
 
 
+def check_linux_settings() -> None:
+  """On Linux bytecode goes to the user's cache, OpenMP comes from the app.
+
+  The packages install into /opt, where users cannot write bytecode, and a
+  minimal system has no libgomp, which _cmd needs.
+  """
+  tmp_app_root = os.environ.get("PYMOL_APP_ROOT")
+  if not sys.platform.startswith("linux") or not tmp_app_root:
+    return
+  tmp_prefix = sys.pycache_prefix or ""
+  assert tmp_prefix.endswith("/PyMOL-Open-Source/pycache"), (
+    f"bytecode goes to {tmp_prefix!r}"
+  )
+  with open("/proc/self/maps", encoding="utf-8") as tmp_maps:
+    tmp_gomp = {
+      tmp_line.split()[-1]
+      for tmp_line in tmp_maps
+      if tmp_line.rstrip().endswith("/libgomp.so.1")
+    }
+  tmp_root = os.path.realpath(tmp_app_root)
+  assert tmp_gomp and all(
+    os.path.realpath(tmp_path).startswith(tmp_root) for tmp_path in tmp_gomp
+  ), f"libgomp loaded from {tmp_gomp}"
+
+
 def check_app_user_model_id() -> None:
   """The Windows process carries the app's AppUserModelID.
 
@@ -204,6 +229,7 @@ try:
   check_app_user_model_id()
   check_macos_bundle_executable()
   check_macos_python_settings()
+  check_linux_settings()
   check_certificates()
   with tempfile.TemporaryDirectory() as tmp_dir:
     check_commands(tmp_dir)

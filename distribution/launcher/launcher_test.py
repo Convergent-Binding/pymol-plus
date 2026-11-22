@@ -79,7 +79,11 @@ class LauncherTest(unittest.TestCase):
     Returns:
       The finished process, with its output.
     """
-    tmp_env = dict(os.environ, FAKE_EXIT_CODE=str(exit_code))
+    tmp_env = dict(
+      os.environ,
+      FAKE_EXIT_CODE=str(exit_code),
+      XDG_CACHE_HOME=str(self.root / "cache"),
+    )
     tmp_env.pop("PYMOL_APP_ROOT", None)
     return subprocess.run(
       [str(self.launcher), *args],
@@ -102,9 +106,13 @@ class LauncherTest(unittest.TestCase):
     tmp_result = self._run("-cq", tmp_argument)
 
     self.assertEqual(tmp_result.returncode, 0, tmp_result.stderr)
+    tmp_options = ["-I"]
+    if not _WINDOWS:
+      tmp_cache = self.root / "cache" / "PyMOL-Open-Source" / "pycache"
+      tmp_options += ["-X", f"pycache_prefix={tmp_cache}"]
     self.assertEqual(
       json.loads(tmp_result.stdout.decode("utf-8"))["args"],
-      ["-I", "-m", "pymol.startup_wrapper", "-cq", tmp_argument],
+      [*tmp_options, "-m", "pymol.startup_wrapper", "-cq", tmp_argument],
     )
 
   @unittest.skipIf(_MACOS, "macOS runs Python in the launcher's process")
