@@ -2,6 +2,7 @@ load("@rules_python//python/uv:lock.bzl", "lock")
 
 exports_files([
     "build_requirements_lock.txt",
+    "checks_requirements_lock.txt",
     "requirements_lock.txt",
 ])
 
@@ -49,6 +50,25 @@ lock(
         "3.13",
     ],
     python_version = "3.13",
+)
+
+# Locks checks_requirements.in, the quick checks' tools.
+lock(
+    name = "checks_requirements",
+    srcs = ["checks_requirements.in"],
+    out = "checks_requirements_lock.txt",
+    args = [
+        "--universal",
+        "--python-version",
+        "3.13",
+    ],
+    python_version = "3.13",
+)
+
+# The quick checks on the checkout: bazel run //distribution:checks
+alias(
+    name = "checks",
+    actual = "//distribution/checks",
 )
 
 # Locks build_requirements.in, the Python packages the app's build runs.

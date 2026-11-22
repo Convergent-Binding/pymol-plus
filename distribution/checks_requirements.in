@@ -1,0 +1,7 @@
+# The quick checks' tools, which //distribution:checks runs, locked in
+# checks_requirements_lock.txt for Python 3.13 with
+#   bazel run //distribution:checks_requirements.update
+# Each wheel brings its tool as a program of its own.
+actionlint-py==1.7.12.25
+ruff==0.17.4
+shellcheck-py==0.11.0.1
