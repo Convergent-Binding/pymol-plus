@@ -52,7 +52,7 @@
 - "App: PySide6 stays at 6.9"; the test dependency is `PySide6-Essentials==6.9.3`, the pin in `distribution/requirements_lock.txt`.
 - "New dependency versions only when they are at least 14 days old."
 - Python follows `opp-workflow:python-style`; `python3 .opp/style/check.py --committed` passes on the last push.
-- Pull requests get the Bazel check only; the branch `pymol3-dock-panels` starts from `origin/bazel-app-packaging` and ends in a pull request into `bazel-app-packaging` (rebased there: production has no merge_wheel_files, which PySide6 needs on Windows).
+- Pull requests get the Bazel check only; the branch `pymol3-dock-panels` starts from `origin/production` and ends in a pull request into `production` (built on bazel-app-packaging for its merge_wheel_files, which PySide6 needs on Windows; rebased onto production once that branch merged there).
 
 ## Review Focus
 
@@ -127,7 +127,7 @@ class DockPanel:
 - Each panel has a checkable entry under **Display → Plugin Panels** that shows and hides it and follows its visibility; `remove()` takes the entry away.
 - `get_dock_panel()` returns the handle for a live id and `None` otherwise; a freed id can be used again.
 - Without a Qt main window the call raises `pymol.plugins.QtNotAvailableError`; a reused id or an unknown area raises `ValueError`; a call off the GUI thread raises `RuntimeError`.
-- `git diff origin/bazel-app-packaging --stat` lists only paths in `## Scope`.
+- `git diff origin/production --stat` lists only paths in `## Scope`.
 - README.md documents the API with a short plugin example.
 
 ## Reach
@@ -234,5 +234,5 @@ class DockPanel:
 - `bazel test //distribution/...` on Windows: passes, `edited_base_test` included (no upstream file changed).
 - `bazel run //distribution:checks`: ruff, shellcheck and actionlint pass.
 - `python3 .opp/style/check.py --committed`: no findings.
-- `git diff origin/bazel-app-packaging --stat`: only paths in `## Scope`.
+- `git diff origin/production --stat`: only paths in `## Scope`.
 - Task 4 Step 6 in the running app: the panel docks on the left, its menu entry hides and shows it, and the call works from `PyMOL>` and from a `run` script.
