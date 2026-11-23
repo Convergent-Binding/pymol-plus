@@ -55,10 +55,17 @@ def test_import_in_pymol_namespace_keeps_pymol_gui():
   module's namespace, so the import must not replace a name PyMOL's own
   code reads there.
   """
-  tmp_names_before = set(vars(pymol))
+  tmp_namespace = vars(pymol)
+  tmp_before = dict(tmp_namespace)
   try:
-    exec("from pymol3 import ui", vars(pymol))
+    exec("from pymol3 import ui", tmp_namespace)
+    tmp_replaced = [
+        tmp_name
+        for tmp_name, tmp_value in tmp_before.items()
+        if tmp_namespace.get(tmp_name) is not tmp_value
+    ]
+    assert tmp_replaced == []
     assert pymol.gui is sys.modules["pymol.gui"]
   finally:
-    for tmp_name in set(vars(pymol)) - tmp_names_before:
-      delattr(pymol, tmp_name)
+    tmp_namespace.clear()
+    tmp_namespace.update(tmp_before)

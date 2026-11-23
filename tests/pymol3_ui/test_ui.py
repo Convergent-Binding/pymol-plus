@@ -195,11 +195,12 @@ def _plugin_panels_actions(window) -> list:
   Returns:
     One list per Plugin Panels submenu, each with its actions.
   """
+  tmp_display = window.menudict["Display"]
   return [
-      tmp_action.menu().actions()
-      for tmp_action in window.menudict["Display"].actions()
-      if tmp_action.menu() is not None
-      and tmp_action.text() == "Plugin Panels"
+      tmp_menu.actions()
+      for tmp_menu in tmp_display.findChildren(qt.QtWidgets.QMenu)
+      if tmp_menu.parent() is tmp_display
+      and tmp_menu.title() == "Plugin Panels"
   ]
 
 

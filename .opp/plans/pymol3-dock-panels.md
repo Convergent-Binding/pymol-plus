@@ -56,7 +56,7 @@
 
 ## Review Focus
 
-1. **The wheel test job without a display or without Qt.** `scripts/test_wheel.py` runs `tests/` against each installed release wheel; there the Qt tests must skip when no binding is installed and must not try to open a real display when one is. Covered by `pytest.importorskip("pymol.Qt")` and `QT_QPA_PLATFORM=offscreen` set before the import in `tests/pymol3_ui/conftest.py` (Task 2), and by `test_import_needs_no_qt_binding` (Task 2).
+1. **The wheel test job without a display or without Qt.** `scripts/test_wheel.py` runs `tests/` against each installed release wheel; there the Qt tests must skip when no binding is installed and must not try to open a real display when one is. Covered by `tests/pymol3_ui/qt_binding.py` (`importorskip("pymol.Qt", exc_type=ImportError)`, or a hard import where `PYMOL3_TESTS_REQUIRE_QT` is set, as under Bazel) and `QT_QPA_PLATFORM=offscreen` set before the import in `tests/pymol3_ui/conftest.py` (Task 2), and by `test_import_needs_no_qt_binding` (Task 2).
 2. **A plugin loaded twice** (the plugin manager's reload) reusing its `panel_id`: `ValueError`, and `get_dock_panel()` finds the first panel. `test_duplicate_panel_id_raises_value_error` (Task 2).
 3. **`remove()` called twice, or `show()` after `remove()`:** the second `remove()` does nothing; `show()` after `remove()` raises `RuntimeError("panel was removed")` rather than touching a deleted Qt object. `test_remove_twice_is_harmless`, `test_show_after_remove_raises` (Task 2).
 4. **A call from a command typed at `PyMOL>` or a `run` script**, which must run in the GUI thread for the API to be usable from scripts. Pinned by the manual check in Task 4; if it raises the thread error there, stop and bring it back to the developer.
@@ -90,7 +90,7 @@ README.md
 ## Interfaces
 
 ```python
-# modules/pymol3/gui.py
+# modules/pymol3/ui.py
 def add_dock_panel(
     widget: QtWidgets.QWidget,
     title: str,
@@ -157,7 +157,7 @@ class DockPanel:
 ### Task 2: `add_dock_panel`, `get_dock_panel` and `DockPanel`
 
 **Files:**
-- Create: `modules/pymol3/gui.py`, `tests/pymol3_ui/__init__.py`, `tests/pymol3_ui/conftest.py`, `tests/pymol3_ui/test_ui.py`, `tests/pymol3_ui/test_ui_headless.py`
+- Create: `modules/pymol3/ui.py`, `tests/pymol3_ui/__init__.py`, `tests/pymol3_ui/conftest.py`, `tests/pymol3_ui/test_ui.py`, `tests/pymol3_ui/test_ui_headless.py`
 - Modify: `tools/bazel/requirements.in`, `tools/bazel/requirements_lock.txt`, `MODULE.bazel.lock`, `tests/BUILD.bazel`
 
 **Interfaces:**
@@ -165,7 +165,7 @@ class DockPanel:
 - Produces: `add_dock_panel`, `get_dock_panel`, `DockPanel` as in `## Interfaces`; the fixture `main_window` in `tests/pymol3_ui/conftest.py` (a `QMainWindow` with a central widget and `menudict = {"": menubar, "Display": <QMenu>}`, returned by a monkeypatched `pymol.gui.get_qtwindow`, shown, and closed after the test).
 
 - [ ] **Step 1: Add the test dependency.** Append `PySide6-Essentials==6.9.3` to `tools/bazel/requirements.in` with a comment line saying the `pymol3` GUI tests need a Qt binding, pinned as the app's; run `bazel run //tools/bazel:requirements.update`. In `tests/BUILD.bazel` add `"//modules/pymol3"`, `"//modules/pmg_tk"` (pymol.plugins imports it) and a `merge_wheel_files` of `@pymol_pip//pyside6_essentials` and `@pymol_pip//shiboken6` (`:qt_site_packages_lib`; on Windows PySide6 finds shiboken6 only as a real sibling) to `deps` and `env = {"QT_QPA_PLATFORM": "offscreen"}`.
-- [ ] **Step 2: Write the fixture.** `tests/pymol3_ui/conftest.py` sets `os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")` at import; fixture `main_window` as in Interfaces calls `pytest.importorskip("pymol.Qt")` first (inside the fixture, so the headless tests still run without Qt), then reuses `QApplication.instance()` or creates one.
+- [ ] **Step 2: Write the fixture.** `tests/pymol3_ui/conftest.py` sets `os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")` at import; fixture `main_window` as in Interfaces calls `qt_binding.import_qt()` first (a skip on any ImportError, a failure under Bazel's `PYMOL3_TESTS_REQUIRE_QT=1`) (inside the fixture, so the headless tests still run without Qt), then reuses `QApplication.instance()` or creates one.
 - [ ] **Step 3: Write the failing tests** in `tests/pymol3_ui/test_ui.py`, each with a one-line docstring:
   - `test_docks_widget_in_requested_area` (parametrized over `"left"`, `"Right"`, `"top"`, `"bottom"` and `Qt.DockWidgetArea.BottomDockWidgetArea`): `main_window.dockWidgetArea(panel.dock_widget)` is the matching area; `panel.dock_widget.widget() is tmp_label`; `panel.dock_widget.windowTitle() == "Sequences"`.
   - `test_area_defaults_to_right`: area is `RightDockWidgetArea`.
@@ -183,15 +183,15 @@ class DockPanel:
   And in `tests/pymol3_ui/test_ui_headless.py`, which imports no Qt binding:
   - `test_import_needs_no_qt_binding`: in a fresh interpreter (`subprocess.run([sys.executable, "-c", ...])` with `PYTHONPATH` set to the test's `sys.path`, since other tests in the session import `pymol.Qt`), `import pymol3.ui` leaves `"pymol.Qt"` out of `sys.modules`; return code 0.
   - `test_without_qt_window_raises_qt_not_available`: with `pymol.gui.get_qtwindow` patched to return `None`, `add_dock_panel(object(), "T")` raises `pymol.plugins.QtNotAvailableError`.
-- [ ] **Step 4: Run them to see them fail.** `bazel test //tests --test_output=errors` → FAIL, `module 'pymol3' has no attribute 'gui'` or `No module named 'pymol3.ui'`.
-- [ ] **Step 5: Implement `modules/pymol3/gui.py`** with the signatures in `## Interfaces`. The area table maps the four lower-cased names to `Qt.DockWidgetArea` members; the registry is `window._pymol3_dock_panels`, created on first use; `DockPanel` keeps a `_removed` flag that `show()`/`hide()` check. Module docstring carries a short plugin example (`__init_plugin__` calling `add_dock_panel`).
+- [ ] **Step 4: Run them to see them fail.** `bazel test //tests --test_output=errors` → FAIL, `module 'pymol3' has no attribute 'ui'` or `No module named 'pymol3.ui'`.
+- [ ] **Step 5: Implement `modules/pymol3/ui.py`** with the signatures in `## Interfaces`. The area table maps the four lower-cased names to `Qt.DockWidgetArea` members; the registry is `window._pymol3_dock_panels`, created on first use; `DockPanel` keeps a `_removed` flag that `show()`/`hide()` check. Module docstring carries a short plugin example (`__init_plugin__` calling `add_dock_panel`).
 - [ ] **Step 6: Run them to see them pass.** `bazel test //tests --test_output=errors` → PASS; `--test_output=all` shows the `tests/pymol3_ui` tests as passed, none skipped.
-- [ ] **Step 7: Commit.** `git add modules/pymol3/gui.py tests/pymol3_ui tests/BUILD.bazel tools/bazel/requirements.in tools/bazel/requirements_lock.txt MODULE.bazel.lock` → `feat: let plugins dock their own panels with pymol3.ui`
+- [ ] **Step 7: Commit.** `git add modules/pymol3/ui.py tests/pymol3_ui tests/BUILD.bazel tools/bazel/requirements.in tools/bazel/requirements_lock.txt MODULE.bazel.lock` → `feat: let plugins dock their own panels with pymol3.ui`
 
 ### Task 3: Menu entries and tabbing
 
 **Files:**
-- Modify: `modules/pymol3/gui.py`, `tests/pymol3_ui/test_ui.py`, `tests/pymol3_ui/conftest.py` (a second fixture)
+- Modify: `modules/pymol3/ui.py`, `tests/pymol3_ui/test_ui.py`, `tests/pymol3_ui/conftest.py` (a second fixture)
 
 **Interfaces:**
 - Consumes: `add_dock_panel`, `DockPanel`, fixture `main_window` (Task 2).
@@ -209,12 +209,12 @@ class DockPanel:
 - [ ] **Step 2: Run them to see them fail.** `bazel test //tests --test_output=errors --test_arg=-k --test_arg="menu or entry or tabbed or menudict"` → FAIL.
 - [ ] **Step 3: Implement.** The entry is the dock widget's own `toggleViewAction()`, so its check state follows the dock widget; the submenu is found by title in `menudict["Display"]` or added after a separator; `remove()` removes the action from it. Tabbing as in `## Edge cases`, with `window.tabifyDockWidget()`.
 - [ ] **Step 4: Run them to see them pass.** `bazel test //tests --test_output=errors` → PASS.
-- [ ] **Step 5: Commit.** `git add modules/pymol3/gui.py tests/pymol3_ui` → `feat: list plugin panels under Display and tab panels sharing an area`
+- [ ] **Step 5: Commit.** `git add modules/pymol3/ui.py tests/pymol3_ui` → `feat: list plugin panels under Display and tab panels sharing an area`
 
 ### Task 4: The GUI-thread rule, the README and the check in the real app
 
 **Files:**
-- Modify: `modules/pymol3/gui.py`, `tests/pymol3_ui/test_ui.py`, `README.md`
+- Modify: `modules/pymol3/ui.py`, `tests/pymol3_ui/test_ui.py`, `README.md`
 
 **Interfaces:**
 - Consumes: everything above.
@@ -225,7 +225,7 @@ class DockPanel:
 - [ ] **Step 4: Run all tests.** `bazel test //tests --test_output=errors` → PASS.
 - [ ] **Step 5: Document.** README.md gets a section `## Plugin API: dock panels` after `## Install` (and a line in `## Contents of this document`): what `pymol3` is (additions only, never changes to PyMOL's API), a ten-line `__init_plugin__` example, the four areas, the errors.
 - [ ] **Step 6: Check in the real app.** Build `bazel build //distribution/bundle`, start the app from it, and at `PyMOL>` run `/from pymol3 import ui; from pymol.Qt import QtWidgets; ui.add_dock_panel(QtWidgets.QLabel("hello"), "Test", area="left")`. Expected: a "Test" panel on the left, an entry **Display → Plugin Panels → Test** that hides and shows it. Then run the same line from a script with `run`. If either raises the thread `RuntimeError`, stop and bring it to the developer.
-- [ ] **Step 7: Commit.** `git add modules/pymol3/gui.py tests/pymol3_ui/test_ui.py README.md` → `feat: refuse dock panel calls off the GUI thread; document pymol3.ui`
+- [ ] **Step 7: Commit.** `git add modules/pymol3/ui.py tests/pymol3_ui/test_ui.py README.md` → `feat: refuse dock panel calls off the GUI thread; document pymol3.ui`
 
 ## Verification
 

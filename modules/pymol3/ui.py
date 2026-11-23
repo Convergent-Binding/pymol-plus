@@ -112,7 +112,7 @@ class DockPanel:
     """Takes the panel out of the window and frees its id.
 
     The dock widget and the plugin's widget in it are deleted. A second
-    call does nothing.
+    call from the GUI thread does nothing.
 
     Raises:
       RuntimeError: The call came from another thread than the GUI thread.
