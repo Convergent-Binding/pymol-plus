@@ -75,6 +75,7 @@ MODULE.bazel.lock
 README.md
 .opp/plans/pymol3-dock-panels.md
 docs/decisions/0001-pymol-api-additions-live-in-pymol3.md
+.github/workflows/bazel.yaml
 
 ## Done
 
