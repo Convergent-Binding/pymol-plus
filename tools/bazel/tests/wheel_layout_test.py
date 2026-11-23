@@ -58,6 +58,7 @@ class WheelLayoutTest(unittest.TestCase):
     self.assertIn(f"chempy/champ/_champ{_EXTENSION_SUFFIX}", self.members)
 
   def test_packages_and_data_are_at_installed_paths(self) -> None:
+    """Every package, pymol3 included, and PyMOL's data install in place."""
     for member in (
         "pymol/__init__.py",
         "pymol2/__init__.py",
