@@ -6,10 +6,10 @@ areas; PyMOL wraps the widget in a dock widget and returns a ``DockPanel``
 to show, hide or remove it later::
 
     from pymol.Qt import QtWidgets
-    from pymol3 import gui
+    from pymol3 import ui
 
     def __init_plugin__(app=None):
-      gui.add_dock_panel(
+      ui.add_dock_panel(
           QtWidgets.QLabel("Hello"), "My Plugin", area="left",
           panel_id="my_plugin")
 
@@ -230,8 +230,8 @@ def _qt_window() -> QtWidgets.QMainWindow | None:
 
   ``pymol.gui`` is taken from ``sys.modules``, never as an attribute of
   ``pymol``: scripts and Python typed at ``PyMOL>`` run in the ``pymol``
-  module's namespace, where ``from pymol3 import gui`` replaces that
-  attribute with this module.
+  module's namespace, where an import such as ``from x import gui`` can
+  replace that attribute.
 
   Returns:
     The window, or None when PyMOL runs without its Qt GUI.

@@ -69,25 +69,22 @@ The package `pymol3` holds this repository's additions to PyMOL's API. It only a
 in PyMOL's own `pymol`, `pmg_qt` or `pymol2` packages changes, so existing plugins and
 scripts keep working.
 
-`pymol3.gui` lets a plugin dock its own widget as a panel in the left, right, top or bottom
+`pymol3.ui` lets a plugin dock its own widget as a panel in the left, right, top or bottom
 area of PyMOL's main window:
 ```python
 from pymol.Qt import QtWidgets
-from pymol3 import gui
+from pymol3 import ui
 
 def __init_plugin__(app=None):
-    panel = gui.add_dock_panel(
+    panel = ui.add_dock_panel(
         QtWidgets.QLabel("Hello"), "My Plugin", area="left", panel_id="my_plugin")
     # Later: panel.hide(), panel.show(), panel.remove(),
-    # or gui.get_dock_panel("my_plugin") to find it again.
+    # or ui.get_dock_panel("my_plugin") to find it again.
 ```
 - `area` is `"left"`, `"right"` (the default), `"top"` or `"bottom"`, or a
   `Qt.DockWidgetArea` member; panels in the same area open as tabs.
 - Each panel gets a show/hide entry under **Display → Plugin Panels**.
 - `panel.dock_widget` is the `QDockWidget`, for anything beyond the basics.
-- In a script started with `run` or in Python typed at `PyMOL>`, prefer `import pymol3.gui`:
-  those run in the `pymol` module's namespace, where `from pymol3 import gui` replaces
-  `pymol.gui` for other code (`pymol3` itself keeps working).
 - Without PyMOL's Qt window (`pymol -c`, the Tk GUI, embedded `pymol2`) the call raises
   `pymol.plugins.QtNotAvailableError`; a used `panel_id` or an unknown area raises
   `ValueError`; a call from another thread than the GUI thread raises `RuntimeError`.

@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: BSD-3-Clause
-"""Tests of pymol3.gui's dock panels in a Qt main window."""
+"""Tests of pymol3.ui's dock panels in a Qt main window."""
 
 import threading
 
@@ -7,7 +7,7 @@ import pytest
 
 import pymol
 
-from pymol3 import gui
+from pymol3 import ui
 
 from . import qt_binding
 
@@ -39,7 +39,7 @@ def test_docks_widget_in_requested_area(main_window, area, expected):
     expected: The Qt area the panel must end up in.
   """
   tmp_label = qt.QtWidgets.QLabel("sequence")
-  tmp_panel = gui.add_dock_panel(tmp_label, "Sequences", area=area)
+  tmp_panel = ui.add_dock_panel(tmp_label, "Sequences", area=area)
   assert main_window.dockWidgetArea(tmp_panel.dock_widget) == expected
   assert tmp_panel.dock_widget.widget() is tmp_label
   assert tmp_panel.dock_widget.windowTitle() == "Sequences"
@@ -51,7 +51,7 @@ def test_area_defaults_to_right(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   assert (
       main_window.dockWidgetArea(tmp_panel.dock_widget)
       == _AREA.RightDockWidgetArea
@@ -64,9 +64,9 @@ def test_panel_id_defaults_to_title(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   assert tmp_panel.panel_id == "Sequences"
-  assert gui.get_dock_panel("Sequences") is tmp_panel
+  assert ui.get_dock_panel("Sequences") is tmp_panel
 
 
 def test_object_name_carries_panel_id(main_window):
@@ -75,7 +75,7 @@ def test_object_name_carries_panel_id(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(
+  tmp_panel = ui.add_dock_panel(
       qt.QtWidgets.QLabel(), "Sequences", panel_id="seq"
   )
   assert tmp_panel.dock_widget.objectName() == "pymol3_panel_seq"
@@ -87,7 +87,7 @@ def test_get_dock_panel_returns_none_for_unknown_id(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  assert gui.get_dock_panel("nothing") is None
+  assert ui.get_dock_panel("nothing") is None
 
 
 def test_hide_and_show(main_window):
@@ -96,7 +96,7 @@ def test_hide_and_show(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   tmp_panel.hide()
   assert not tmp_panel.is_visible()
   assert tmp_panel.dock_widget.isHidden()
@@ -111,7 +111,7 @@ def test_floating_panel_floats(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(
+  tmp_panel = ui.add_dock_panel(
       qt.QtWidgets.QLabel(), "Sequences", floating=True
   )
   assert tmp_panel.dock_widget.isFloating()
@@ -123,15 +123,15 @@ def test_remove_frees_id(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(
+  tmp_panel = ui.add_dock_panel(
       qt.QtWidgets.QLabel(), "Sequences", panel_id="seq"
   )
   tmp_panel.remove()
-  assert gui.get_dock_panel("seq") is None
-  tmp_again = gui.add_dock_panel(
+  assert ui.get_dock_panel("seq") is None
+  tmp_again = ui.add_dock_panel(
       qt.QtWidgets.QLabel(), "Again", panel_id="seq"
   )
-  assert gui.get_dock_panel("seq") is tmp_again
+  assert ui.get_dock_panel("seq") is tmp_again
 
 
 def test_remove_twice_is_harmless(main_window):
@@ -140,7 +140,7 @@ def test_remove_twice_is_harmless(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   tmp_panel.remove()
   tmp_panel.remove()
 
@@ -151,7 +151,7 @@ def test_show_after_remove_raises(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   tmp_panel.remove()
   with pytest.raises(RuntimeError, match="removed"):
     tmp_panel.show()
@@ -163,12 +163,12 @@ def test_duplicate_panel_id_raises_value_error(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_first = gui.add_dock_panel(
+  tmp_first = ui.add_dock_panel(
       qt.QtWidgets.QLabel(), "Sequences", panel_id="seq"
   )
   with pytest.raises(ValueError, match="seq"):
-    gui.add_dock_panel(qt.QtWidgets.QLabel(), "Other", panel_id="seq")
-  assert gui.get_dock_panel("seq") is tmp_first
+    ui.add_dock_panel(qt.QtWidgets.QLabel(), "Other", panel_id="seq")
+  assert ui.get_dock_panel("seq") is tmp_first
 
 
 @pytest.mark.parametrize("area", ["middle", _AREA.AllDockWidgetAreas])
@@ -180,10 +180,10 @@ def test_unknown_area_raises_value_error(main_window, area):
     area: The area a plugin passes.
   """
   with pytest.raises(ValueError) as tmp_raised:
-    gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences", area=area)
+    ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences", area=area)
   for tmp_name in ("left", "right", "top", "bottom"):
     assert tmp_name in str(tmp_raised.value)
-  assert gui.get_dock_panel("Sequences") is None
+  assert ui.get_dock_panel("Sequences") is None
 
 
 def _plugin_panels_actions(window) -> list:
@@ -209,7 +209,7 @@ def test_panel_has_checkable_entry_under_plugin_panels(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   [tmp_actions] = _plugin_panels_actions(main_window)
   [tmp_entry] = tmp_actions
   assert tmp_entry.text() == "Sequences"
@@ -225,12 +225,12 @@ def test_close_button_hides_and_menu_unchecks(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   [[tmp_entry]] = _plugin_panels_actions(main_window)
   tmp_panel.dock_widget.close()
   assert not tmp_panel.is_visible()
   assert not tmp_entry.isChecked()
-  assert gui.get_dock_panel("Sequences") is tmp_panel
+  assert ui.get_dock_panel("Sequences") is tmp_panel
   tmp_panel.show()
   assert tmp_entry.isChecked()
 
@@ -241,8 +241,8 @@ def test_one_submenu_for_many_panels(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
-  gui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts", area="left")
+  ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  ui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts", area="left")
   [tmp_actions] = _plugin_panels_actions(main_window)
   assert [tmp_action.text() for tmp_action in tmp_actions] == [
       "Sequences",
@@ -256,7 +256,7 @@ def test_remove_takes_entry_away(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   tmp_panel.remove()
   [tmp_actions] = _plugin_panels_actions(main_window)
   assert "Sequences" not in [tmp_action.text() for tmp_action in tmp_actions]
@@ -268,7 +268,7 @@ def test_window_without_menudict_still_docks(bare_main_window):
   Args:
     bare_main_window: The window PyMOL returns, without menudict.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   assert (
       bare_main_window.dockWidgetArea(tmp_panel.dock_widget)
       == _AREA.RightDockWidgetArea
@@ -281,8 +281,8 @@ def test_second_panel_in_same_area_is_tabbed(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_first = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
-  tmp_second = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts")
+  tmp_first = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_second = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts")
   assert tmp_second.dock_widget in main_window.tabifiedDockWidgets(
       tmp_first.dock_widget
   )
@@ -294,8 +294,8 @@ def test_panel_in_other_area_is_not_tabbed(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_first = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
-  gui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts", area="left")
+  tmp_first = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  ui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts", area="left")
   assert main_window.tabifiedDockWidgets(tmp_first.dock_widget) == []
 
 
@@ -305,8 +305,8 @@ def test_floating_panel_is_not_tabbed(main_window):
   Args:
     main_window: The window PyMOL returns.
   """
-  tmp_first = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
-  tmp_second = gui.add_dock_panel(
+  tmp_first = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_second = ui.add_dock_panel(
       qt.QtWidgets.QLabel(), "Contacts", floating=True
   )
   assert tmp_second.dock_widget.isFloating()
@@ -325,7 +325,7 @@ def test_call_from_worker_thread_raises_runtime_error(main_window):
   def tmp_call() -> None:
     """Adds a panel from the worker thread and keeps what it raises."""
     try:
-      gui.add_dock_panel(tmp_label, "T")
+      ui.add_dock_panel(tmp_label, "T")
     except RuntimeError as exception:
       tmp_raised.append(exception)
 
@@ -334,22 +334,22 @@ def test_call_from_worker_thread_raises_runtime_error(main_window):
   tmp_thread.join()
   [tmp_exception] = tmp_raised
   assert "GUI thread" in str(tmp_exception)
-  assert gui.get_dock_panel("T") is None
+  assert ui.get_dock_panel("T") is None
 
 
 def test_works_when_pymol_gui_name_is_replaced(main_window, monkeypatch):
-  """A script's ``from pymol3 import gui`` in PyMOL's namespace breaks nothing.
+  """Panels still dock when a script has replaced the name ``pymol.gui``.
 
   PyMOL runs scripts and typed Python in the ``pymol`` module's namespace,
-  where that import replaces the attribute ``pymol.gui``.
+  where an import such as ``from x import gui`` replaces that attribute.
 
   Args:
     main_window: The window PyMOL returns.
-    monkeypatch: Replaces ``pymol.gui`` with ``pymol3.gui``.
+    monkeypatch: Replaces ``pymol.gui`` with another module.
   """
-  monkeypatch.setattr(pymol, "gui", gui)
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
-  assert gui.get_dock_panel("Sequences") is tmp_panel
+  monkeypatch.setattr(pymol, "gui", ui)
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  assert ui.get_dock_panel("Sequences") is tmp_panel
 
 
 @pytest.mark.parametrize("method", ["show", "hide", "remove"])
@@ -362,7 +362,7 @@ def test_panel_methods_from_worker_thread_raise_runtime_error(
     main_window: The window PyMOL returns.
     method: The panel method a worker thread calls.
   """
-  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_panel = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   tmp_raised = []
 
   def tmp_call() -> None:
@@ -378,4 +378,4 @@ def test_panel_methods_from_worker_thread_raise_runtime_error(
   [tmp_exception] = tmp_raised
   assert "GUI thread" in str(tmp_exception)
   assert tmp_panel.is_visible()
-  assert gui.get_dock_panel("Sequences") is tmp_panel
+  assert ui.get_dock_panel("Sequences") is tmp_panel

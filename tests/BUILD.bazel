@@ -52,7 +52,7 @@ py_test(
         ":qt_site_packages_lib",
         ":test_files",
         "//modules/chempy",
-        # pymol.plugins, which pymol3.gui raises errors from, imports pmg_tk.
+        # pymol.plugins, which pymol3.ui raises errors from, imports pmg_tk.
         "//modules/pmg_tk",
         "//modules/pymol",
         "//modules/pymol2",
