@@ -26,7 +26,7 @@ def _make_window(monkeypatch: pytest.MonkeyPatch, with_menus: bool):
   Returns:
     The main window.
   """
-  tmp_qt = pytest.importorskip("pymol.Qt")
+  tmp_qt = pytest.importorskip("pymol.Qt", exc_type=ImportError)
   if tmp_qt.QtWidgets.QApplication.instance() is None:
     tmp_qt.QtWidgets.QApplication(["pymol3-tests"])
   tmp_window = tmp_qt.QtWidgets.QMainWindow()
