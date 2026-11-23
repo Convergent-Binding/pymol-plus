@@ -295,14 +295,17 @@ def _plugin_panels_menu(
   if not isinstance(tmp_menus, dict) or "Display" not in tmp_menus:
     return None
   tmp_display = tmp_menus["Display"]
-  for tmp_action in tmp_display.actions():
-    if tmp_action.menu() is not None and tmp_action.text() == _MENU_TITLE:
-      return tmp_action.menu()
+  # Found among the Display menu's child menus rather than through
+  # QAction.menu(), which Qt 6 dropped and not every binding brings back.
+  tmp_qt = _import_qt()
+  for tmp_child in tmp_display.findChildren(tmp_qt.QtWidgets.QMenu):
+    if tmp_child.parent() is tmp_display and tmp_child.title() == _MENU_TITLE:
+      return tmp_child
   if not create:
     return None
   # The Display menu is the submenu's Qt parent and owner; a submenu that
   # addMenu(title) makes would be deleted with its Python wrapper.
-  tmp_menu = _import_qt().QtWidgets.QMenu(_MENU_TITLE, tmp_display)
+  tmp_menu = tmp_qt.QtWidgets.QMenu(_MENU_TITLE, tmp_display)
   tmp_display.addSeparator()
   tmp_display.addMenu(tmp_menu)
   return tmp_menu
