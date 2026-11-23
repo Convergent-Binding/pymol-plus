@@ -14,7 +14,7 @@
 
 **What the user sees.**
 
-- **Live mode.** **Plugin → Allow Claude to control PyMOL+** switches it on (off by default, remembered); the status bar shows "Claude connected" while a client is attached, with a button to disconnect. Commands Claude runs appear in the output panel and the command history like typed ones. The Plugin menu entries are added after `initializePlugins()`, which clears `menudict['Plugin']` (`pymol_qt_gui.py`), to `menudict['PluginQt']`.
+- **Live mode.** **Plugin → Allow Claude to control PyMOL+** switches it on (off by default, remembered); the status bar shows "Claude connected" while a client is attached, with a button to disconnect. Commands Claude runs appear in the output panel and the command history like typed ones. The Plugin menu entries are added in the `ready` phase, after `initializePlugins()`, which clears `menudict['Plugin']` (`pymol_qt_gui.py`), to `menudict.get('PluginQt', menudict['Plugin'])`, since `'PluginQt'` exists only when plugins are on (not with `-k`); `ready` runs whether or not plugins are on, and the entries are added again after a later Plugin → Initialize Plugin System.
 - **Headless mode.** When no PyMOL+ with live mode is open, or when Claude is asked for it (`mode="headless"`), the server starts its own windowless PyMOL that stays alive (`pymol -cqK` with the bridge started as a thread from a `-d`/startup script, since a bare `pymol -cq` exits when its input ends) and stops it when the session ends.
 - **Tools** (the same in both modes):
   - `run_pymol` – run any PyMOL command-language lines, Python and shell included (developer's choice), returning output and errors;
