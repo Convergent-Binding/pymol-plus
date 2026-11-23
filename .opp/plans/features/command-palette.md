@@ -103,7 +103,7 @@ All four steps below are merged into `production`, and a fresh app install start
 
 Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts. Every step leaves the app usable: the External GUI stays on by default until step 3, so nobody is left without a command input.
 
-0. **Prerequisite:** `pymol3-dock-panels` merged into `production` (the `pymol3` package and `pymol3.ui`).
+0. **Prerequisite (met):** `pymol3-dock-panels` merged into `production` (Convergent-Binding/pymol-plus#15), with the `pymol3` package and `pymol3.ui`.
 1. **Palette** (`command-palette`): the popup, the command index (names, argument signatures, help descriptions), ranking with recent commands first, argument suggestions, the hybrid input, Ctrl+Shift+P, and the hook in the edited GUI that installs it. Done when the palette runs commands in the app beside the unchanged External GUI.
 2. **Bottom panel and layout toggles** (`command-output-panel`): the output panel docked at the bottom through `pymol3.ui`, fed by the feedback hook; red tracebacks and `Error:` lines; Clear and Search; Ctrl+J; opening by itself on a failed command; the three layout toggles as actions (placed in the toolbar in step 3, reachable from the menu until then).
 3. **Toolbar, status bar and the legacy setting** (`command-toolbar`): the toolbar with the search button, quick buttons and layout toggles; progress and Abort in the status bar; the "Show at start" setting, default off, honouring an explicit command-line choice.
