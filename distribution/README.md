@@ -34,11 +34,13 @@ Please note that the files provided here are **unofficial**. They are informal, 
 ## Contents of this repository
 | Folder | Content |
 |--------|---------|
-| `automations/` | Build commands (`./automator.sh build app`, `.\win_automator.bat build packages`) |
-| `os_specific/` | cx_Freeze configuration and packaging per platform (Inno Setup, DMG, .deb/.rpm/.tar.gz) |
+| `bundle/`, `launcher/` | The app folder: Python runtime, packages, PyMOL and the native launcher (Bazel) |
+| `windows/`, `macos/`, `linux/` | The packages per platform: installer and ZIP, app and DMG, .tar.gz/.deb/.rpm (Bazel) |
+| `os_specific/` | Per-platform files of the packages: icons, splash screens, Inno Setup script, DMG background, desktop and AppStream files |
+| `checks/` | The quick checks (`bazel run //distribution:checks`) |
 | `edited/` | PyMOL files changed for this setup (marked `BEGIN EDITED CODE SEGMENT`) and the start script |
 | `licenses/` | License texts shipped with every package |
-| `tests/` | Smoke tests of the frozen app and checks of the packages |
+| `tests/` | Smoke tests of the app and checks of the packages |
 | `docs/website/` | The [website](https://kullik01.github.io/pymol-open-source-setup/) (MkDocs) |
 
 The version of the packages (e.g. 3.2.0.3+1) is the version of the PyMOL wheel plus a build number of
@@ -49,53 +51,49 @@ The GUI uses Qt 6 (PySide6 6.9) and runs natively on Wayland; `QT_QPA_PLATFORM=x
 
 ## From source
 The following information is about building a platform dependent package/setup from source.
-The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exactly these steps
-for all three platforms.
+The GitHub action [build_app.yaml](../.github/workflows/build_app.yaml) runs exactly these steps.
 
 ### Prerequisites
-- [uv](https://docs.astral.sh/uv/getting-started/installation/); it also installs the Python of `.python-version` if needed
+- [Bazelisk](https://github.com/bazelbuild/bazelisk) and a C++ compiler, as for the wheel (see the
+  README at the repository root)
 - Windows: [Inno Setup 7](https://jrsoftware.org/isinfo.php) (default install location or `ISCC.exe` on the `PATH`)
-- Linux (**only** for building the .deb/.rpm packages): [fpm](https://fpm.readthedocs.io/) and `rpmbuild`
-  - Debian/Ubuntu: `sudo apt-get install ruby rpm && sudo gem install fpm`
-  - Fedora: `sudo dnf install ruby rpm-build && sudo gem install fpm`
-- macOS (**only** for building the DMG): [create-dmg](https://github.com/create-dmg/create-dmg) (`brew install create-dmg`)
+- Linux (**only** for the .rpm): `rpmbuild` (`rpm-build` on Fedora and RHEL, `rpm` on
+  Debian/Ubuntu). Release packages are built in the `quay.io/pypa/manylinux_2_28_x86_64`
+  container, so that they need at most glibc 2.28.
 
-### Step-by-step guide
-On Windows, use `.\win_automator.bat` instead of `./automator.sh`.
-1. Create the virtual environment `.venv` with all dependencies (`requirements.txt`, one file
-   for all platforms). Run it again after the requirements changed:
-   ```shell
-   ./automator.sh setup
-   ```
-2. Build the frozen application into the `dist` directory:
-   ```shell
-   ./automator.sh build app
-   ```
-   | Platform      | Output                                         |
-   |---------------|------------------------------------------------|
-   | Windows/Linux | `dist/exe.<platform>-<Python version>/`        |
-   | macOS         | `dist/PyMOL-Open-Source.app`                   |
-3. Check the build with the smoke test (`test gui` also starts the Qt GUI):
-   ```shell
-   ./automator.sh test
-   ```
-4. Create the installer/packages of your platform in `os_specific/dist` (Windows: Inno Setup
-   installer; Linux: .tar.gz, .deb and .rpm; macOS: DMG):
-   ```shell
-   ./automator.sh build packages
-   ```
-   The DMG name tells the architecture of the built app (`_macOS_AppleSilicon.dmg` or
-   `_macOS_Intel.dmg`); on a Mac it is the architecture of the Python used for the build.
+### Windows
+Bazel builds the app and its packages; run from anywhere in the repository:
+```shell
+bazel build //distribution/windows:portable_zip //distribution/windows:installer
+bazel test //distribution/...
+```
+The app folder is `//distribution/bundle`; `bazel cquery --output=files <target>` prints where
+each output is. The installer needs Inno Setup 7 (see the prerequisites).
 
-`./automator.sh build all` runs steps 2 and 4 in one go.
+### macOS
+Bazel builds `PyMOL-Open-Source.app` for the Mac's architecture, signs it ad hoc and writes
+the DMG (create-dmg comes with the build):
+```shell
+bazel build //distribution/macos:dmg
+bazel test //distribution/...
+```
+
+### Linux
+Bazel builds the app and its .tar.gz, .deb and .rpm:
+```shell
+bazel build //distribution/linux:packages
+bazel test //distribution/...
+```
+The packages install on eight distributions in CI
+(`tests/test_linux_package.sh <package>` in a container, as root).
 
 ### Quick checks
-The CI job "checks" lints the Python code (ruff), the shell scripts (shellcheck) and the
-GitHub workflows (actionlint) in about half a minute. Run the same checks locally with
-[uv](https://docs.astral.sh/uv/):
+The CI job "checks" lints the app's Python code (ruff) and shell scripts (shellcheck) and
+the repository's GitHub workflows (actionlint). Run the same checks locally, with the tools
+Bazel fetches at the versions in `checks_requirements.in`:
 ```shell
-uvx pre-commit run --all-files    # once
-uvx pre-commit install            # before every commit from now on
+bazel run //distribution:checks            # check
+bazel run //distribution:checks -- --fix   # also apply ruff's fixes
 ```
 
 ### CI and pull requests
@@ -109,16 +107,17 @@ uvx pre-commit install            # before every commit from now on
   Apple Silicon, or dropped).
 
 ### Dependency updates (Dependabot)
-Dependabot opens weekly, grouped pull requests for the Python packages, the GitHub Actions
-and the pre-commit hooks, with versions that are at least 14 days old. Every update
+Dependabot opens weekly, grouped pull requests for the Python packages (the check tools'
+included) and the GitHub Actions, with versions that are at least 14 days old. Every update
 waits for a review and is merged by hand, like any other pull request.
 Deliberate limits:
-- **PyMOL wheel** (`pymol-open-source-whl`): always its own pull request,
-  because the files in `edited/` must be ported to the new version first (the build stops
-  until `EDITED_FOR_PYMOL_WHL_VERSION` in `automations/build_exe.py` matches).
 - **PySide6/shiboken6** stay at 6.9: 6.10 and newer need macOS 13 and glibc 2.34, which
   would drop macOS 12 and RHEL/AlmaLinux 8.
 - **biopython** stays at 1.86: newer versions have no Python 3.13 wheels for Intel Macs.
+
+Dependabot does not update PyMOL itself: the app bundles the wheel built from this
+repository. When a PyMOL file that `edited/` replaces changes in `modules/`,
+`//distribution/edited:edited_base_test` fails until the edits are ported.
 
 ## Releasing a new version
 The version in [pyproject.toml](pyproject.toml) is the only place to change. The build,

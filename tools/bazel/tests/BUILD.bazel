@@ -99,3 +99,12 @@ cc_test(
     size = "small",
     srcs = ["release_mode_test.cc"],
 )
+
+# merge_wheel_files copies wheels into one tree and refuses two wheels that
+# ship the same path.
+py_test(
+    name = "merge_wheel_files_test",
+    size = "small",
+    srcs = ["merge_wheel_files_test.py"],
+    deps = ["//tools/bazel:merge_wheel_files_lib"],
+)

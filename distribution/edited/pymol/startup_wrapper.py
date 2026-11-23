@@ -17,14 +17,12 @@ CA_BUNDLE_FILEPATHS = {
 def _use_system_ca_certificates() -> None:
   """Lets HTTPS (e.g. fetching structures from the PDB) use the system's certificates.
 
-  The OpenSSL bundled by cx_Freeze on Linux looks for certificates in paths of
-  its build environment that exist on no real system, so every HTTPS
-  connection fails with CERTIFICATE_VERIFY_FAILED. On macOS the frozen app has
-  the same problem. Windows uses the Windows certificate store instead.
+  The OpenSSL of the bundled Python runtime looks for certificates in paths
+  of its build environment that exist on no real system, so on Linux and
+  macOS every HTTPS connection fails with CERTIFICATE_VERIFY_FAILED. Windows
+  uses the Windows certificate store instead.
 
   Nothing is changed if the user already set SSL_CERT_FILE or SSL_CERT_DIR.
-  Must run before ssl is imported: cx_Freeze's ssl hook then keeps this file
-  instead of the certificate file it copied from the build machine.
   """
   if os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
     return
@@ -61,7 +59,24 @@ def _use_whole_scale_on_wayland() -> None:
     os.environ["QT_SCALE_FACTOR_ROUNDING_POLICY"] = "Ceil"
 
 
+def _use_app_user_model_id() -> None:
+  """Gives the Windows process the app's taskbar identity.
+
+  The window belongs to the bundled pythonw.exe, so without an explicit
+  AppUserModelID the taskbar shows Python's icon in a group of its own. The
+  installer's shortcuts carry the same ID (setup.iss), so the running app
+  joins their group and shows their icon.
+  """
+  if sys.platform != "win32":
+    return
+  import ctypes
+  ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+    "io.github.kullik01.pymol-open-source"
+  )
+
+
 if __name__ == '__main__':
+  _use_app_user_model_id()
   _use_system_ca_certificates()
   _use_pyside6()
   _use_whole_scale_on_wayland()

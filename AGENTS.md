@@ -40,11 +40,25 @@ distribution/README.md.
 - `bazel test //...`: all tests; `bazel test //tests` only the pytest tests under `tests/`
 - `bazel run //tools/bazel:requirements.update`: relock `tools/bazel/requirements.in`
 
-**App commands** (in `distribution/`; Windows: `win_automator.bat` instead of `./automator.sh`):
-- `./automator.sh setup`: fresh `.venv` with the Python of `.python-version` and `requirements.txt` (uv)
-- `./automator.sh build app` / `build packages` / `build all`; `./automator.sh test` / `test gui`
-- `uvx pre-commit run --all-files`: ruff, shellcheck, actionlint (the CI job "checks")
-- Linux packages on 8 distributions: `tests/test_linux_package.sh <package>` in a container
+**App commands, Windows** (anywhere in the repository):
+- `bazel build //distribution/windows:portable_zip //distribution/windows:installer`: the ZIP and
+  the installer (Inno Setup 7 installed); `//distribution/bundle` is the app folder
+- `bazel test //distribution/...`: the app's tests, a moved copy's headless smoke test included
+
+**App commands, macOS** (anywhere in the repository, on a Mac):
+- `bazel build //distribution/macos:dmg`: `PyMOL-Open-Source.app` for this Mac's architecture,
+  signed ad hoc (`//distribution/macos:signed_app`), and its DMG
+- `bazel test //distribution/...`: also checks every binary's architecture and macOS 12 minimum
+
+**App commands, Linux** (anywhere in the repository; release packages in the
+`quay.io/pypa/manylinux_2_28_x86_64` container for glibc 2.28):
+- `bazel build //distribution/linux:packages`: the .tar.gz, .deb and .rpm (`rpmbuild` installed)
+- `bazel test //distribution/...`: also checks every binary's libraries and glibc 2.28
+- Linux packages on 8 distributions: `distribution/tests/test_linux_package.sh <package>` in a container
+
+**App checks** (anywhere in the repository):
+- `bazel run //distribution:checks`: ruff, shellcheck, actionlint (the CI job "checks");
+  `-- --fix` applies ruff's fixes
 
 **Rules:**
 - Pull requests get the Bazel check only; the wheel matrix (`wheels.yaml`, 35-40 minutes) runs on
@@ -57,8 +71,8 @@ distribution/README.md.
   `pyproject.toml`. A tag `setup-v<version>` builds a draft app release; the website is published
   only when a release is published.
 - `distribution/edited/` holds upstream PyMOL files with marked edits (`BEGIN EDITED CODE SEGMENT`);
-  a new PyMOL wheel needs them ported (`EDITED_FOR_PYMOL_WHL_VERSION` in
-  `distribution/automations/build_exe.py`).
+  when a `modules/` original changes, `//distribution/edited:edited_base_test` fails until the
+  edits are ported and `distribution/edited/upstream.sha256` is updated.
 
 **Decisions (keep them unless Hannah decides otherwise):**
 - App: PySide6 stays at 6.9 (6.10+ drops macOS 12 and RHEL/AlmaLinux 8); Python 3.13; biopython 1.86.

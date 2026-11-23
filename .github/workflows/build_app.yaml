@@ -22,10 +22,8 @@ on:
     # release; plain v* tags belong to the PyMOL wheel (wheels.yaml)
     tags:
       - 'setup-v*'
-    # Branch pushes only build when the app changed (GitHub ignores paths for tags)
-    paths:
-      - 'distribution/**'
-      - '.github/workflows/build_app.yaml'
+    # No paths filter: the app bundles the PyMOL built from this repository, so nearly
+    # every change can reach it
   # No paths filter: the 'release' check must exist on every pull request; the
   # 'changes' job below skips the builds when the app is not affected
   pull_request:
@@ -45,16 +43,15 @@ defaults:
     working-directory: distribution
 
 env:
-  # More robust against temporary network problems with PyPI
-  # uv (./automator.sh setup) uses the Python of actions/setup-python, which gets bundled into the app
-  UV_PYTHON_PREFERENCE: only-system
   # The smoke tests also download a structure from the PDB (HTTPS)
   PYMOL_SMOKE_TEST_ONLINE: "1"
 
 jobs:
-  # ----- Which parts a change affects: a pull request that only changes text files
-  # (README, Dependabot and release-notes settings) or files outside
-  # distribution/ (the PyMOL wheel) skips the app builds.
+  # ----- Which parts a change affects: a pull request that only changes files that do
+  # not reach the app (READMEs, AGENTS.md, the wheel's docs and tests, the upstream test
+  # suite, Dependabot and release-notes settings, issue templates, the wheel's own
+  # workflows) skips the app builds. Everything else can reach the app, which bundles the
+  # PyMOL Bazel builds from this repository.
   # Pushes to production and version tags always build everything.
   changes:
     runs-on: ubuntu-latest
@@ -69,44 +66,34 @@ jobs:
       - name: Check whether the app has to be built
         id: filter
         env:
-          APP_FILES: '^(distribution/|\.github/workflows/build_app\.yaml$)'
-          TEXT_ONLY: '^distribution/README\.md$'
+          NOT_APP: '^(README\.md|AGENTS\.md|distribution/README\.md|\.mailmap|(docs|tests|testing|\.opp|\.codegraph)/.*|\.github/(ISSUE_TEMPLATE/.*|dependabot\.yml|release\.yml|workflows/(wheels|bazel|docs)\.yaml))$'
         run: |
           BUILD=true
           # The checked-out merge commit's first parent is the base branch
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ] \
-            && ! git diff --name-only HEAD^1 HEAD | grep -E "$APP_FILES" | grep -qvE "$TEXT_ONLY"; then
+            && ! git diff --name-only HEAD^1 HEAD | grep -qvE "$NOT_APP"; then
             BUILD=false
           fi
           echo "build=${BUILD}" | tee -a "$GITHUB_OUTPUT"
   # --- end
 
-  # ----- Quick checks: Python (ruff), shell scripts (shellcheck) and workflows (actionlint),
-  # configured in distribution/.pre-commit-config.yaml; they check the app's files and
-  # workflows only, not the PyMOL wheel sources
+  # ----- Quick checks: Python (ruff) and shell scripts (shellcheck) of the app, and the
+  # repository's workflows (actionlint), from pinned wheels (//distribution:checks); not
+  # the PyMOL wheel sources
   checks:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          # The pre-commit cache below is the one this job uses
-          enable-cache: false
-
-      - name: Cache the check tools
-        uses: actions/cache@v6
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ hashFiles('distribution/.pre-commit-config.yaml') }}
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
 
       - name: Run the checks
-        # pre-commit runs from the repository root, so the files are given explicitly
-        run: |
-          git ls-files -z . ../.github/workflows/build_app.yaml ../.github/workflows/docs.yaml \
-            | xargs -0 uvx pre-commit@4.7.0 run --config .pre-commit-config.yaml --show-diff-on-failure --files
+        run: bazel run //distribution:checks
 
       - name: Validate the Linux desktop entry and AppStream metadata
         run: |
@@ -134,22 +121,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Python
-        uses: actions/setup-python@v7
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          python-version-file: 'distribution/.python-version'
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Extract project and Python version
-        run: |
-          echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
-          echo "PYTHON_VERSION=$(cat .python-version)" >> "$GITHUB_ENV"
-
-      - name: Create virtual environment
-        shell: cmd
-        run: win_automator.bat setup
+      - name: Extract project version
+        run: echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
 
       - name: Install Inno Setup
         shell: pwsh
@@ -160,42 +139,44 @@ jobs:
           if ($hash -ne '8a5a6711c3766a6e5fb74f280ba0e3551e719ce94538d901fdbd1f8f9920b3f0') { throw "Unexpected SHA-256 of the Inno Setup installer: $hash" }
           Start-Process -FilePath "$env:RUNNER_TEMP\innosetup.exe" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/ALLUSERS' -Wait
 
-      - name: Cache the Microsoft C++ runtime
-        # cx_Freeze downloads it from Microsoft once; the cache keeps builds reproducible.
-        # Change the key to take a newer runtime.
-        uses: actions/cache@v6
-        with:
-          path: ~\AppData\Roaming\cxfreeze\vc_redist
-          key: msvc-runtime-17-v1
+      - name: Build the app, the portable ZIP and the installer
+        # The app bundles the Microsoft C++ runtime, which Bazel fetches pinned
+        timeout-minutes: 45
+        run: bazel build //distribution/bundle //distribution/windows:portable_zip //distribution/windows:installer
 
-      - name: Build frozen application
-        # Also downloads the Microsoft C++ runtime (if not cached), which is bundled into the app
-        timeout-minutes: 30
-        shell: cmd
-        run: win_automator.bat build app
+      - name: Test the app with Bazel
+        # Also checks that every C++ runtime DLL the binaries import is bundled
+        # (//distribution/bundle:msvc_runtime_test) and runs a moved copy headless
+        timeout-minutes: 15
+        run: bazel test //distribution/... --test_output=errors
 
-      - name: Check the bundled C++ runtime
-        run: .venv/Scripts/python tests/check_msvc_runtime.py "dist/exe.win-amd64-${PYTHON_VERSION}"
+      - name: Collect the app and the packages
+        # Bazel's output paths are relative to the repository root
+        run: |
+          ROOT="$(git rev-parse --show-toplevel)"
+          mkdir -p os_specific/dist
+          for TARGET in //distribution/windows:portable_zip //distribution/windows:installer; do
+            cp "$ROOT/$(bazel cquery --output=files "config($TARGET, target)")" os_specific/dist/
+          done
+          APP_DIR="$(cygpath -u "$RUNNER_TEMP")/app"
+          cp -r "$ROOT/$(bazel cquery --output=files "config(//distribution/bundle, target)")" "$APP_DIR"
+          echo "APP_DIR=$APP_DIR" >> "$GITHUB_ENV"
+          ls -l os_specific/dist
 
       - name: Smoke test
         timeout-minutes: 5
-        shell: cmd
-        run: win_automator.bat test
+        run: tests/run_smoke_test.sh "$APP_DIR/PyMOL-Open-Source.exe"
 
       - name: GUI smoke test
         timeout-minutes: 5
         # The runner has no GPU (only OpenGL 1.1). Test a copy of the app with the bundled
-        # software OpenGL (Mesa) as opengl32.dll, like the troubleshooting note on the website;
-        # the copy keeps the DLL out of the installer and the ZIP.
+        # software OpenGL (Mesa) as opengl32.dll beside pythonw.exe, like the troubleshooting
+        # note on the website; the copy keeps the DLL out of the installer and the ZIP.
         run: |
           GUI_TEST_DIR="$(cygpath -u "$RUNNER_TEMP")/gui-test"
-          cp -r "dist/exe.win-amd64-${PYTHON_VERSION}" "$GUI_TEST_DIR"
-          cp "$GUI_TEST_DIR/opengl32sw.dll" "$GUI_TEST_DIR/opengl32.dll"
+          cp -r "$APP_DIR" "$GUI_TEST_DIR"
+          cp "$GUI_TEST_DIR/runtime/opengl32sw.dll" "$GUI_TEST_DIR/runtime/opengl32.dll"
           tests/run_smoke_test.sh --gui "$GUI_TEST_DIR/PyMOL-Open-Source.exe"
-
-      - name: Build installer
-        shell: cmd
-        run: win_automator.bat build packages
 
       - name: Download the latest published release (update test)
         env:
@@ -270,9 +251,6 @@ jobs:
           if (Test-Path 'HKCU:\Software\Classes\OpenSourcePyMOL.File') { throw "File type registration left" }
           if ((Get-ItemProperty 'HKCU:\Software\Classes\.pse' -ErrorAction SilentlyContinue).'(default)' -eq 'OpenSourcePyMOL.File') { throw ".pse association left" }
 
-      - name: Create portable archive
-        run: 7z a -tzip -bso0 -bsp0 "os_specific/dist/PyMOL-Open-Source_v${PROJECT_VERSION}_x64_portable.zip" "./dist/exe.win-amd64-${PYTHON_VERSION}/*"
-
       - name: Test portable archive
         timeout-minutes: 5
         run: |
@@ -306,46 +284,45 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Python
-        uses: actions/setup-python@v7
+      - uses: bazel-contrib/setup-bazel@0.19.0
         with:
-          python-version-file: 'distribution/.python-version'
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}-${{ matrix.runner }}
 
       - name: Extract project version
         run: echo "PROJECT_VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)" >> "$GITHUB_ENV"
 
-      - name: Create virtual environment
-        run: ./automator.sh setup
+      - name: Build the app and its DMG
+        # Bazel wraps the app into PyMOL-Open-Source.app for this Mac's architecture,
+        # signs it ad hoc (prevents Gatekeeper "damaged app" errors) and writes the DMG
+        timeout-minutes: 45
+        run: bazel build //distribution/macos:signed_app //distribution/macos:dmg
 
-      - name: Build app bundle
-        run: ./automator.sh build app
+      - name: Test the app with Bazel
+        # Also checks that every binary has this architecture and runs on macOS 12
+        # (//distribution/macos:app_checks_test) and runs a moved copy headless
+        timeout-minutes: 15
+        run: bazel test //distribution/... --test_output=errors
 
-      - name: Ad-hoc sign app bundle
-        # Prevents Gatekeeper "damaged app" errors
-        run: codesign --force --deep --sign - "dist/PyMOL-Open-Source.app"
+      - name: Collect the app and the DMG
+        # Bazel's output paths are relative to the repository root
+        run: |
+          ROOT="$(git rev-parse --show-toplevel)"
+          mkdir -p os_specific/dist
+          cp "$ROOT/$(bazel cquery --output=files "config(//distribution/macos:dmg, target)")" os_specific/dist/
+          APP_DIR="${RUNNER_TEMP}/app"
+          mkdir -p "$APP_DIR"
+          cp -R "$ROOT/$(bazel cquery --output=files "config(//distribution/macos:signed_app, target)")" "$APP_DIR/"
+          echo "APP=${APP_DIR}/PyMOL-Open-Source.app" >> "$GITHUB_ENV"
+          ls -l os_specific/dist
 
       - name: Smoke test
         timeout-minutes: 5
         run: |
-          ./automator.sh test
-          tests/run_smoke_test.sh --gui "dist/PyMOL-Open-Source.app/Contents/MacOS/PyMOL-Open-Source"
-          codesign --verify --deep "dist/PyMOL-Open-Source.app"
-
-      - name: Install create-dmg
-        env:
-          CREATE_DMG_VERSION: "1.3.0"
-          CREATE_DMG_SHA256: "c50d2bc97c3d6292642bac55f530d247eaf4bf65ee605f26b4caf339383e381c"
-        run: |
-          curl -fsSL -o "${RUNNER_TEMP}/create-dmg.tar.gz" "https://github.com/create-dmg/create-dmg/archive/refs/tags/v${CREATE_DMG_VERSION}.tar.gz"
-          echo "${CREATE_DMG_SHA256}  ${RUNNER_TEMP}/create-dmg.tar.gz" | shasum -a 256 -c -
-          tar -xzf "${RUNNER_TEMP}/create-dmg.tar.gz" -C "${RUNNER_TEMP}"
-          echo "CREATE_DMG=${RUNNER_TEMP}/create-dmg-${CREATE_DMG_VERSION}/create-dmg" >> "$GITHUB_ENV"
-
-      - name: Build DMG
-        run: ./automator.sh build packages
+          tests/run_smoke_test.sh "$APP/Contents/MacOS/PyMOL-Open-Source"
+          tests/run_smoke_test.sh --gui "$APP/Contents/MacOS/PyMOL-Open-Source"
+          codesign --verify --deep "$APP"
 
       - name: Verify DMG
         # Mounts the DMG like a user would and tests the app inside it
@@ -367,8 +344,8 @@ jobs:
           test "$(plutil -extract CFBundleIdentifier raw "$APP/Contents/Info.plist")" = "io.github.kullik01.pymol-open-source"
           # File types (.pdb, .cif, .pse) that open with PyMOL in Finder
           test "$(plutil -extract UTExportedTypeDeclarations.0.UTTypeIdentifier raw "$APP/Contents/Info.plist")" = "io.github.kullik01.pymol-open-source.pse"
-          # PyMOL is built for this runner's architecture (build_dmg.sh checks that Qt and numpy match it)
-          test "$(lipo -archs "$APP"/Contents/Resources/lib/pymol/_cmd.*.so)" = "${{ matrix.arch }}"
+          # PyMOL is built for this runner's architecture (app_checks_test checks every binary)
+          test "$(lipo -archs "$APP"/Contents/Resources/runtime/lib/python3.13/site-packages/pymol/_cmd.*.so)" = "${{ matrix.arch }}"
           tests/run_smoke_test.sh "$APP/Contents/MacOS/PyMOL-Open-Source"
 
       - name: Upload artifact
@@ -382,42 +359,78 @@ jobs:
 
   # ----- GNU Linux build section
   build-gnu-linux:
-    # The oldest available runner, so the app also runs on older distributions
+    # PyPA's manylinux_2_28 image, in which the wheel is built too: binaries built
+    # there need at most glibc 2.28, so the app also runs on RHEL/AlmaLinux 8
     needs: changes
     if: needs.changes.outputs.build == 'true'
     runs-on: ubuntu-22.04
+    container: quay.io/pypa/manylinux_2_28_x86_64
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Setup Python
-        uses: actions/setup-python@v7
-        with:
-          python-version-file: 'distribution/.python-version'
+      # The checkout belongs to another user than the container's root, and git
+      # refuses such a repository; the build-info header's git SHA comes from git.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v10.3.3
-
-      - name: Create virtual environment
-        run: ./automator.sh setup
-
-      - name: Install system packages
-        # libxcb-cursor is bundled into the app for Qt's X11 support (RHEL/Alma 8 only have
-        # it in EPEL); rpm and fpm build the packages
+      # The image ships no bazel; bazelisk honours .bazelversion.
+      - name: Install bazelisk
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq libxcb-cursor0 rpm
-          sudo gem install --no-document fpm -v 1.18.0
+          curl -fsSL -o /usr/local/bin/bazel \
+            https://github.com/bazelbuild/bazelisk/releases/download/v1.29.0/bazelisk-linux-amd64
+          chmod +x /usr/local/bin/bazel
+          bazel --version
 
-      - name: Build frozen application
-        run: ./automator.sh build app
+      - name: Install the OpenGL headers and rpmbuild
+        run: dnf install -y -q mesa-libGL-devel rpm-build
+
+      - uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          repository-cache: true
+          disk-cache: ${{ github.workflow }}-${{ github.job }}
+
+      - name: Build the .tar.gz, .deb and .rpm packages
+        timeout-minutes: 45
+        # rpmbuild's output, printed only when it fails, runs to megabytes
+        run: >-
+          bazel build //distribution/linux:packages
+          --experimental_ui_max_stdouterr_bytes=16777216
+
+      - name: Test the app and the packages with Bazel
+        # Also checks every binary's libraries and glibc 2.28
+        # (//distribution/linux:linux_libraries_test) and runs a moved copy headless
+        timeout-minutes: 15
+        run: bazel test //distribution/... --test_output=errors
+
+      - name: Collect the packages
+        # Bazel's output paths are relative to the repository root
+        run: |
+          ROOT="$(git rev-parse --show-toplevel)"
+          mkdir -p os_specific/dist
+          for TARGET in tarball deb rpm; do
+            cp "$ROOT/$(bazel cquery --output=files "config(//distribution/linux:$TARGET, target)")" os_specific/dist/
+          done
+          ls -l os_specific/dist
+          rpm -qpi os_specific/dist/*.rpm
+          rpm -qpR os_specific/dist/*.rpm
+          rpm -qpl os_specific/dist/*.rpm | grep -v '/opt/' || true
+          # Only the declared requirements, and no bundled library provided
+          if rpm -qpR os_specific/dist/*.rpm | grep -E 'libQt|libgomp|libpython|libpyside|libshiboken'; then
+            echo "The rpm requires libraries generated from its own files"; exit 1
+          fi
+          if rpm -qp --provides os_specific/dist/*.rpm | grep -F '.so'; then
+            echo "The rpm provides its bundled libraries"; exit 1
+          fi
 
       - name: Smoke test
+        # From the extracted tarball; the package tests below install the .deb and .rpm
         timeout-minutes: 5
-        run: ./automator.sh test
-
-      - name: Build .tar.gz, .deb and .rpm packages
-        run: ./automator.sh build packages
+        run: |
+          APP_DIR="$(mktemp -d)"
+          tar -xzf os_specific/dist/*.tar.gz -C "$APP_DIR"
+          tests/run_smoke_test.sh "$APP_DIR"/PyMOL-Open-Source-*/PyMOL-Open-Source
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
@@ -426,6 +439,18 @@ jobs:
           path: distribution/os_specific/dist/*
           # The packages are already compressed
           compression-level: 0
+
+  # The latest published release, for the package tests' update test. A job of its
+  # own: build-gnu-linux's container has no gh.
+  previous-linux-release:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: distribution/tests
 
       - name: Download the latest published release (update test)
         env:
@@ -443,7 +468,7 @@ jobs:
   # Installs the packages on clean distributions (the package manager has to
   # resolve all declared dependencies) and runs the headless and GUI smoke tests.
   test-gnu-linux-packages:
-    needs: build-gnu-linux
+    needs: [build-gnu-linux, previous-linux-release]
     strategy:
       fail-fast: false
       matrix:
@@ -519,7 +544,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v7
         with:
-          python-version-file: 'distribution/.python-version'
+          python-version: '3.13'
           cache: 'pip'
           cache-dependency-path: 'distribution/docs/website/requirements.txt'
 
@@ -540,7 +565,7 @@ jobs:
   # match. For a version tag it also creates a draft release with all files,
   # which can be checked and published on GitHub.
   release:
-    needs: [changes, checks, website, build-windows, build-macos, build-gnu-linux, test-gnu-linux-packages]
+    needs: [changes, checks, website, build-windows, build-macos, build-gnu-linux, previous-linux-release, test-gnu-linux-packages]
     # The ruleset of 'production' should require this check. It runs even if a job failed or was
     # skipped and fails if any job failed, because a skipped check counts as passed.
     # A cancelled run (a newer push to the same pull request) skips it.

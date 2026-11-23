@@ -1,8 +1,9 @@
-# Weekly pull requests for new versions of the GitHub Actions, the pinned Python
-# packages and the pre-commit hooks; updates are grouped to keep the number low.
+# Weekly pull requests for new versions of the GitHub Actions and the pinned Python
+# packages; updates are grouped to keep the number low.
 # Only versions released at least 14 days ago are proposed (cooldown), so broken
 # releases are usually withdrawn or fixed before they reach a pull request.
-# The Python packages and pre-commit hooks are those of the app in distribution/;
+# The Python packages are those of the app in distribution/, the quick checks' tools
+# (checks_requirements.in) included;
 # the GitHub Actions updates cover all workflows of the repository.
 version: 2
 updates:
@@ -27,9 +28,6 @@ updates:
     groups:
       python-minor-and-patch:
         update-types: ["minor", "patch"]
-        # A new PyMOL wheel needs the files in distribution/edited/ ported first (see
-        # distribution/automations/build_exe.py), so it gets a pull request of its own
-        exclude-patterns: ["pymol-open-source-whl"]
     ignore:
       # Newer biopython has no Python 3.13 wheels for Intel Macs
       - dependency-name: "biopython"
@@ -39,13 +37,3 @@ updates:
         versions: [">=6.10"]
       - dependency-name: "shiboken6"
         versions: [">=6.10"]
-
-  - package-ecosystem: "pre-commit"
-    directory: "/distribution"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 14
-    groups:
-      pre-commit-hooks:
-        patterns: ["*"]

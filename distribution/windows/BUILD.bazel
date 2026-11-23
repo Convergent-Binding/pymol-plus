@@ -1,0 +1,119 @@
+# The Windows packages of the app: the C++ runtime it bundles, the portable
+# ZIP and the Inno Setup installer.
+
+load("@app_project_metadata//:metadata.bzl", "VERSION")
+load("@inno_setup//:defs.bzl", "ISCC_PATH")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load(":inno_setup.bzl", "inno_setup_installer", "portable_zip")
+load(":msvc_runtime.bzl", "msvc_runtime")
+
+# Reads PE import tables, for the tests that check the bundled runtimes.
+py_library(
+    name = "pe_imports",
+    srcs = ["pe_imports.py"],
+    imports = ["."],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+py_binary(
+    name = "unpack_vc_redist",
+    srcs = ["unpack_vc_redist.py"],
+    python_version = "3.13",
+    deps = [
+        "@app_build_pip//cabarchive",
+        "@app_build_pip//filelock",
+        "@app_build_pip//freeze_core",
+        "@app_build_pip//lief",
+        "@app_build_pip//striprtf",
+    ],
+)
+
+# The Microsoft C++ and OpenMP runtime DLLs and their license, which the
+# Windows app bundles (//distribution/bundle).
+msvc_runtime(
+    name = "msvc_runtime",
+    target_compatible_with = ["@platforms//os:windows"],
+    vc_redist = "@vc_redist//file",
+    visibility = ["//distribution:__subpackages__"],
+)
+
+filegroup(
+    name = "msvc_runtime_dlls",
+    srcs = [":msvc_runtime"],
+    output_group = "dlls",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+filegroup(
+    name = "msvc_runtime_license",
+    srcs = [":msvc_runtime"],
+    output_group = "license",
+    target_compatible_with = ["@platforms//os:windows"],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+py_binary(
+    name = "make_zip",
+    srcs = ["make_zip.py"],
+    python_version = "3.13",
+)
+
+py_binary(
+    name = "run_iscc",
+    srcs = ["run_iscc.py"],
+    python_version = "3.13",
+)
+
+# The portable ZIP: the app folder's contents at its root, under the release
+# name PyMOL-Open-Source_v<version>_x64_portable.zip.
+portable_zip(
+    name = "portable_zip",
+    app = "//distribution/bundle",
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+py_test(
+    name = "portable_zip_test",
+    size = "small",
+    srcs = ["tests/portable_zip_test.py"],
+    args = [
+        "$(rootpath :portable_zip)",
+        VERSION,
+    ],
+    data = [":portable_zip"],
+    legacy_create_init = False,
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+# The installer, PyMOL-Open-Source_v<version>_x64_setup.exe. Manual: it needs
+# Inno Setup 7 on this machine (@inno_setup).
+inno_setup_installer(
+    name = "installer",
+    app = "//distribution/bundle",
+    iscc_path = ISCC_PATH,
+    script = "//distribution:os_specific/windows/inno_setup/setup.iss",
+    script_files = [
+        "//distribution:os_specific/windows/inno_setup/LICENSE.txt",
+        "//distribution:os_specific/windows/logo.ico",
+    ],
+    tags = ["manual"],
+    target_compatible_with = ["@platforms//os:windows"],
+)
+
+py_library(
+    name = "run_iscc_lib",
+    srcs = ["run_iscc.py"],
+    imports = ["."],
+)
+
+# run_iscc hands ISCC a copy of the app at a short path.
+py_test(
+    name = "run_iscc_test",
+    size = "small",
+    srcs = ["tests/run_iscc_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    target_compatible_with = ["@platforms//os:windows"],
+    deps = [":run_iscc_lib"],
+)

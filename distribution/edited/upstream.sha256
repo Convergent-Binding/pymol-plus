@@ -1,0 +1,5 @@
+# SHA-256, with LF line endings, of the modules/ original each copy in this
+# folder was made from; checked by //distribution/edited:edited_base_test.
+# After porting the edits into a new copy, record the original's new hash.
+c67dedeb5dae4d1f1834e70b6891f7e04e80e28b1fd180f394a1c48a686dc5cc  pmg_qt/pymol_gl_widget.py
+51106dff71a26d214a6c21189ea76802cc1d760eeba098f5395fee81d389dcd6  pmg_qt/pymol_qt_gui.py

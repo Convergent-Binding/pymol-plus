@@ -20,11 +20,35 @@ bazel_dep(name = "rules_cc", version = "0.2.22")
 bazel_dep(name = "rules_python", version = "2.3.2")
 bazel_dep(name = "bazel_skylib", version = "1.8.2")
 
+# The Linux app's .tar.gz, .deb and .rpm (//distribution/linux).
+bazel_dep(name = "rules_pkg", version = "1.3.0")
+
+# rpmbuild of the machine that builds the Linux .rpm, found by rules_pkg.
+find_rpm = use_extension("@rules_pkg//toolchains/rpm:rpmbuild_configure.bzl", "find_system_rpmbuild_bzlmod")
+use_repo(find_rpm, "rules_pkg_rpmbuild")
+
+register_toolchains("@rules_pkg_rpmbuild//:all")
+
 # pyproject.toml's [project] table, read once and exposed as loadable
 # constants, so the wheel rules keep no second copy of the name, version,
 # requires-python or dependency list.
 pyproject = use_extension("//tools/bazel:pyproject_repo.bzl", "pyproject")
 use_repo(pyproject, "pymol_project_metadata")
+
+# The app's name and version (distribution/pyproject.toml), which the Windows
+# packages' file names carry; see //distribution/windows.
+app_project_metadata = use_repo_rule("//tools/bazel:pyproject_repo.bzl", "pyproject_metadata")
+
+app_project_metadata(
+    name = "app_project_metadata",
+    src = "//distribution:pyproject.toml",
+    wheel = False,
+)
+
+# Inno Setup 7's compiler on this machine, for //distribution/windows:installer.
+inno_setup = use_repo_rule("//distribution/windows:inno_setup_repo.bzl", "inno_setup")
+
+inno_setup(name = "inno_setup")
 
 # One toolchain per CPython version the wheels are built for. 3.10, the
 # `requires-python` floor, is the default, so an invocation that names no
@@ -41,6 +65,43 @@ python.toolchain(python_version = "3.11")
 python.toolchain(python_version = "3.12")
 python.toolchain(python_version = "3.13")
 python.toolchain(python_version = "3.14")
+
+# The app bundles the 3.13 runtime itself (python-build-standalone, the files
+# of @python_3_13//:files) and its license text; see //distribution/bundle.
+use_repo(
+    python,
+    "python_3_13",
+    "python_3_13_aarch64-apple-darwin",
+    "python_3_13_x86_64-apple-darwin",
+    "python_3_13_x86_64-pc-windows-msvc",
+    "python_3_13_x86_64-unknown-linux-gnu",
+)
+
+python_license = use_repo_rule("//tools/bazel:python_license.bzl", "python_license")
+
+python_license(
+    name = "python_3_13_license_macos_arm64",
+    interpreter = "@python_3_13_aarch64-apple-darwin//:python",
+    python_version = "3.13",
+)
+
+python_license(
+    name = "python_3_13_license_macos_x86_64",
+    interpreter = "@python_3_13_x86_64-apple-darwin//:python",
+    python_version = "3.13",
+)
+
+python_license(
+    name = "python_3_13_license_windows_x86_64",
+    interpreter = "@python_3_13_x86_64-pc-windows-msvc//:python",
+    python_version = "3.13",
+)
+
+python_license(
+    name = "python_3_13_license_linux_x86_64",
+    interpreter = "@python_3_13_x86_64-unknown-linux-gnu//:python",
+    python_version = "3.13",
+)
 
 # Native libraries from the Bazel Central Registry that //:_cmd.so links.
 bazel_dep(name = "freetype", version = "2.14.1")  # FTL (or GPLv2, not used)
@@ -77,6 +138,8 @@ foreign_cc_tools.ninja(mode = "binary", version = "1.12.1")
 foreign_cc_tools.pkgconfig(mode = "system")
 
 http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+http_file = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_file")
 
 # netCDF-C 4.10.1 (BSD-3-Clause-style), classic API only: that is all
 # netcdfplugin.c calls, and it avoids a transitive HDF5 build.
@@ -163,6 +226,79 @@ pip.parse(
 )
 
 use_repo(pip, "pymol_pip")
+
+# The Python packages bundled into the app, for its Python 3.13; see
+# distribution/requirements.in.
+pip.parse(
+    hub_name = "app_pip",
+    python_version = "3.13",
+    requirements_lock = "//distribution:requirements_lock.txt",
+)
+
+use_repo(pip, "app_pip")
+
+# The Python packages the app's build runs; see distribution/build_requirements.in.
+pip.parse(
+    hub_name = "app_build_pip",
+    python_version = "3.13",
+    requirements_lock = "//distribution:build_requirements_lock.txt",
+)
+
+use_repo(pip, "app_build_pip")
+
+# The quick checks' tools (ruff, ShellCheck, actionlint), which
+# //distribution:checks runs; see distribution/checks_requirements.in.
+pip.parse(
+    hub_name = "app_checks_pip",
+    python_version = "3.13",
+    requirements_lock = "//distribution:checks_requirements_lock.txt",
+)
+
+use_repo(pip, "app_checks_pip")
+
+# libxcb-cursor.so.0, which Qt's X11 support needs and RHEL/AlmaLinux 8 ship
+# only in EPEL: the Linux app bundles Ubuntu 20.04's, as the cx_Freeze app
+# bundled the build machine's (//distribution/linux).
+http_file(
+    name = "libxcb_cursor_deb",
+    downloaded_file_path = "libxcb-cursor0.deb",
+    sha256 = "c9b5d1ad4af57397b1bd77e0a92750e34419def134c0282a0836ae9efc07cf64",
+    urls = ["https://archive.ubuntu.com/ubuntu/pool/universe/x/xcb-util-cursor/libxcb-cursor0_0.1.1-4ubuntu1_amd64.deb"],
+)
+
+# The OpenMP runtime of the compiler that builds _cmd, for the Linux app.
+gomp_linux = use_repo_rule("//distribution/linux:gomp_repo.bzl", "gomp_linux")
+
+gomp_linux(name = "gomp_linux")
+
+# create-dmg, which writes the macOS app's DMG (//distribution/macos:dmg),
+# pinned at the version and checksum build_app.yaml used.
+http_archive(
+    name = "create_dmg",
+    build_file_content = """
+exports_files(["create-dmg"])
+
+filegroup(
+    name = "files",
+    srcs = glob(["**"]),
+    visibility = ["//visibility:public"],
+)
+""",
+    sha256 = "c50d2bc97c3d6292642bac55f530d247eaf4bf65ee605f26b4caf339383e381c",
+    strip_prefix = "create-dmg-1.3.0",
+    urls = ["https://github.com/create-dmg/create-dmg/archive/refs/tags/v1.3.0.tar.gz"],
+)
+
+# The Microsoft C++ and OpenMP runtimes the Windows app bundles, from the
+# Visual C++ Redistributable cx_Freeze used (https://aka.ms/vs/17/release/
+# vc_redist.x64.exe), pinned: Microsoft's permanent URL of the 2026-11-07
+# release names its SHA-256. See //distribution/windows:msvc_runtime.
+http_file(
+    name = "vc_redist",
+    downloaded_file_path = "VC_redist.x64.exe",
+    sha256 = "cc0ff0eb1dc3f5188ae6300faef32bf5beeba4bdd6e8e445a9184072096b713b",
+    urls = ["https://download.visualstudio.microsoft.com/download/pr/e9604e21-4b79-4096-a4b3-1b63d4b55b4d/CC0FF0EB1DC3F5188AE6300FAEF32BF5BEEBA4BDD6E8E445A9184072096B713B/VC_redist.x64.exe"],
+)
 
 # The uv binary //tools/bazel:requirements locks requirements_lock.txt with,
 # fetched by rules_python; the version rules_python 2.3.2 itself uses.

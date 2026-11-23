@@ -50,6 +50,6 @@ For a convenient and user-friendly installation follow these steps (installation
 ## Troubleshooting
 If PyMOL closes right after the start or shows no molecules, the graphics driver may not
 support OpenGL 2 (e.g. in a virtual machine or over Remote Desktop). Then switch PyMOL to the
-included software rendering (slower, but works without a graphics driver): in the folder that
-contains `PyMOL-Open-Source.exe` (`bin` in the installation folder), copy `opengl32sw.dll` and
-name the copy `opengl32.dll`. To switch back, delete `opengl32.dll`.
+included software rendering (slower, but works without a graphics driver): in the `runtime`
+folder next to `PyMOL-Open-Source.exe` (`bin\runtime` in the installation folder), copy
+`opengl32sw.dll` and name the copy `opengl32.dll`. To switch back, delete `opengl32.dll`.

@@ -1,0 +1,100 @@
+# The app's native launcher: it starts the bundle's own Python on PyMOL's
+# startup module. See launcher.c for its contract.
+
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
+load(":resources.bzl", "launcher_resources")
+
+# The app icon and version information the Windows launcher carries.
+launcher_resources(
+    name = "launcher_resources",
+    icon = "//distribution:os_specific/windows/logo.ico",
+    pyproject = "//distribution:pyproject.toml",
+)
+
+# Named like the app, so the binary is PyMOL-Open-Source(.exe).
+cc_binary(
+    name = "PyMOL-Open-Source",
+    srcs = ["launcher.c"],
+    additional_linker_inputs = select({
+        "@platforms//os:windows": [":launcher_resources"],
+        "//conditions:default": [],
+    }),
+    # The launcher sits outside runtime/, beside no C runtime DLL, so on
+    # Windows it carries its C runtime itself; other toolchains ignore this.
+    features = ["static_link_msvcrt"],
+    linkopts = select({
+        # A GUI program: no console window opens next to PyMOL's.
+        "@platforms//os:windows": [
+            "/SUBSYSTEM:WINDOWS",
+            "/ENTRY:wmainCRTStartup",
+            "$(execpath :launcher_resources)",
+        ],
+        "//conditions:default": [],
+    }),
+    local_defines = select({
+        "@platforms//os:windows": [
+            "UNICODE",
+            "_UNICODE",
+        ],
+        "//conditions:default": [],
+    }),
+    # macOS: CPython's headers for the PyConfig API; the launcher loads
+    # libpython at run time, so it is not linked. Built inside the app
+    # (//distribution/bundle), the headers are the app's Python 3.13.
+    deps = select({
+        "@platforms//os:macos": ["@rules_python//python/cc:current_py_cc_headers"],
+        "//conditions:default": [],
+    }),
+)
+
+alias(
+    name = "launcher",
+    actual = ":PyMOL-Open-Source",
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# Stands in for the runtime's interpreter in launcher_test.
+cc_binary(
+    name = "fake_python",
+    testonly = True,
+    srcs = ["fake_python.c"],
+)
+
+py_library(
+    name = "make_resources_lib",
+    srcs = ["make_resources.py"],
+    imports = ["."],
+)
+
+py_binary(
+    name = "make_resources",
+    srcs = ["make_resources.py"],
+    python_version = "3.13",
+)
+
+# The .res file the Windows launcher links: icon and version information.
+py_test(
+    name = "make_resources_test",
+    size = "small",
+    srcs = ["make_resources_test.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = [":make_resources_lib"],
+)
+
+py_test(
+    name = "launcher_test",
+    size = "small",
+    srcs = ["launcher_test.py"],
+    args = [
+        "$(rootpath :PyMOL-Open-Source)",
+        "$(rootpath :fake_python)",
+    ],
+    data = [
+        ":PyMOL-Open-Source",
+        ":fake_python",
+    ],
+    legacy_create_init = False,
+    deps = ["//distribution/windows:pe_imports"],
+)

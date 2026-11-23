@@ -1,0 +1,85 @@
+load("@rules_python//python/uv:lock.bzl", "lock")
+
+exports_files([
+    "build_requirements_lock.txt",
+    "checks_requirements_lock.txt",
+    "requirements_lock.txt",
+])
+
+# The app's own files that //distribution/bundle puts into the app.
+exports_files(
+    [
+        "LICENSE",
+        "alternative_design/alt_logo.png",
+        "os_specific/linux/io.github.kullik01.pymol-open-source.metainfo.xml",
+        "os_specific/linux/pymol-open-source-256.png",
+        "os_specific/linux/pymol-open-source-mime.xml",
+        "os_specific/linux/pymol-open-source.desktop",
+        "os_specific/linux/remove_empty_old_folders.sh",
+        "os_specific/linux/splash.png",
+        "os_specific/macos/Info.plist",
+        "os_specific/macos/dmg/dmg_background.svg",
+        "os_specific/macos/icon.icns",
+        "os_specific/macos/splash.png",
+        "os_specific/windows/inno_setup/LICENSE.txt",
+        "os_specific/windows/inno_setup/setup.iss",
+        "os_specific/windows/logo.ico",
+        "os_specific/windows/splash.png",
+        "pyproject.toml",
+    ],
+    visibility = ["//distribution:__subpackages__"],
+)
+
+filegroup(
+    name = "license_texts",
+    srcs = glob(["licenses/*.txt"]),
+    visibility = ["//distribution:__subpackages__"],
+)
+
+# Locks requirements.in, the packages bundled into the app, into
+# requirements_lock.txt for the app's Python 3.13, with the uv binary
+# rules_python fetches. Tagged manual, as it needs the network; update the
+# lock with `bazel run //distribution:requirements.update`.
+lock(
+    name = "requirements",
+    srcs = ["requirements.in"],
+    out = "requirements_lock.txt",
+    args = [
+        "--universal",
+        "--python-version",
+        "3.13",
+    ],
+    python_version = "3.13",
+)
+
+# Locks checks_requirements.in, the quick checks' tools.
+lock(
+    name = "checks_requirements",
+    srcs = ["checks_requirements.in"],
+    out = "checks_requirements_lock.txt",
+    args = [
+        "--universal",
+        "--python-version",
+        "3.13",
+    ],
+    python_version = "3.13",
+)
+
+# The quick checks on the checkout: bazel run //distribution:checks
+alias(
+    name = "checks",
+    actual = "//distribution/checks",
+)
+
+# Locks build_requirements.in, the Python packages the app's build runs.
+lock(
+    name = "build_requirements",
+    srcs = ["build_requirements.in"],
+    out = "build_requirements_lock.txt",
+    args = [
+        "--universal",
+        "--python-version",
+        "3.13",
+    ],
+    python_version = "3.13",
+)

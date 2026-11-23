@@ -1,6 +1,6 @@
-"""Smoke test for a frozen PyMOL-Open-Source application.
+"""Smoke test for the PyMOL-Open-Source application.
 
-Run it with the frozen executable, use tests/run_smoke_test.sh:
+Run it with the app's launcher, use tests/run_smoke_test.sh:
   headless:          tests/run_smoke_test.sh <executable>
   with the Qt GUI:   tests/run_smoke_test.sh --gui <executable>   (needs a display, e.g. Xvfb)
 
@@ -9,6 +9,7 @@ Note: the certificate check fails if only SSL_CERT_DIR is set (lazily loaded).
 
 Prints "SMOKE TEST OK" on success, otherwise exits with status 1.
 """
+import ctypes
 import faulthandler
 import os
 import pathlib
@@ -49,16 +50,118 @@ def check_bundled_modules_and_data() -> None:
 
 
 def check_licenses() -> None:
-  """The license texts must be shipped next to the executable (macOS: in Resources)."""
-  exe_dir = pathlib.Path(os.path.realpath(sys.executable)).parent
-  candidates = (exe_dir / "licenses", exe_dir.parent / "Resources" / "licenses")
-  licenses_dir = next((d for d in candidates if d.is_dir()), None)
-  assert licenses_dir is not None, f"licenses folder missing next to {exe_dir}"
+  """The license texts must be shipped with the app.
+
+  The Bazel-built app keeps them in the folder its launcher sets as
+  PYMOL_APP_ROOT; the cx_Freeze app next to the executable (macOS: in
+  Resources).
+  """
+  tmp_app_root = os.environ.get("PYMOL_APP_ROOT")
+  tmp_exe_dir = pathlib.Path(os.path.realpath(sys.executable)).parent
+  if tmp_app_root:
+    tmp_candidates = (pathlib.Path(tmp_app_root) / "licenses",)
+  else:
+    tmp_candidates = (
+      tmp_exe_dir / "licenses",
+      tmp_exe_dir.parent / "Resources" / "licenses",
+    )
+  tmp_licenses_dir = next(
+    (tmp_dir for tmp_dir in tmp_candidates if tmp_dir.is_dir()), None
+  )
+  tmp_where = tmp_candidates[0].parent
+  assert tmp_licenses_dir is not None, f"licenses folder missing in {tmp_where}"
   for tmp_name in ("README.txt", "THIRD-PARTY-NOTICES.txt", "pymol-open-source-whl/LICENSE",
                    "LGPL-3.0.txt", "PySide6_Essentials/LGPL-3.0.txt", "Python/LICENSE.txt"):
-    assert (licenses_dir / tmp_name).is_file(), f"license file missing: {tmp_name}"
+    tmp_text = tmp_licenses_dir / tmp_name
+    assert tmp_text.is_file(), f"license file missing: {tmp_name}"
+  # The Windows app bundles the Microsoft C++ runtime with its license: the
+  # Bazel-built app in licenses/, the cx_Freeze app in share/licenses/.
   if sys.platform == "win32":
-    assert (exe_dir / "share" / "licenses" / "vc_redist").is_dir(), "license of the C++ runtime missing"
+    if tmp_app_root:
+      tmp_vc_redist = tmp_licenses_dir / "vc_redist"
+    else:
+      tmp_vc_redist = tmp_exe_dir / "share" / "licenses" / "vc_redist"
+    assert tmp_vc_redist.is_dir(), "license of the C++ runtime missing"
+
+
+APP_USER_MODEL_ID = "io.github.kullik01.pymol-open-source"
+"""The app's identity on the Windows taskbar, also its shortcuts'."""
+
+
+def check_macos_bundle_executable() -> None:
+  """Inside the macOS app the process is the bundle's own executable.
+
+  The launcher runs Python in its own process there, so macOS shows the
+  app with its name and icon; a process of runtime/bin/python3 would show
+  as Python.
+  """
+  tmp_app_root = os.environ.get("PYMOL_APP_ROOT", "")
+  tmp_in_bundle = tmp_app_root.endswith("/Contents/Resources")
+  if sys.platform != "darwin" or not tmp_in_bundle:
+    return
+  tmp_executable = os.path.realpath(sys.executable)
+  assert tmp_executable.endswith("/Contents/MacOS/PyMOL-Open-Source"), (
+    f"the process runs {tmp_executable}"
+  )
+
+
+def check_macos_python_settings() -> None:
+  """The macOS launcher runs Python in UTF-8 mode, bytecode outside the app.
+
+  The app starts from the Finder without LANG, where Python would otherwise
+  read files as ASCII; bytecode written into the signed app would break its
+  signature.
+  """
+  if sys.platform != "darwin" or not os.environ.get("PYMOL_APP_ROOT"):
+    return
+  assert sys.flags.utf8_mode == 1, "Python runs without UTF-8 mode"
+  tmp_prefix = sys.pycache_prefix or ""
+  assert tmp_prefix.endswith("/Library/Caches/PyMOL-Open-Source/pycache"), (
+    f"bytecode goes to {tmp_prefix!r}"
+  )
+
+
+def check_linux_settings() -> None:
+  """On Linux bytecode goes to the user's cache, OpenMP comes from the app.
+
+  The packages install into /opt, where users cannot write bytecode, and a
+  minimal system has no libgomp, which _cmd needs.
+  """
+  tmp_app_root = os.environ.get("PYMOL_APP_ROOT")
+  if not sys.platform.startswith("linux") or not tmp_app_root:
+    return
+  tmp_prefix = sys.pycache_prefix or ""
+  assert tmp_prefix.endswith("/PyMOL-Open-Source/pycache"), (
+    f"bytecode goes to {tmp_prefix!r}"
+  )
+  with open("/proc/self/maps", encoding="utf-8") as tmp_maps:
+    tmp_gomp = {
+      tmp_line.split()[-1]
+      for tmp_line in tmp_maps
+      if tmp_line.rstrip().endswith("/libgomp.so.1")
+    }
+  tmp_root = os.path.realpath(tmp_app_root)
+  assert tmp_gomp and all(
+    os.path.realpath(tmp_path).startswith(tmp_root) for tmp_path in tmp_gomp
+  ), f"libgomp loaded from {tmp_gomp}"
+
+
+def check_app_user_model_id() -> None:
+  """The Windows process carries the app's AppUserModelID.
+
+  The window belongs to pythonw.exe; without the ID the taskbar shows
+  Python's icon in a group of its own instead of the pinned shortcut's.
+  """
+  if sys.platform != "win32":
+    return
+  tmp_id = ctypes.c_wchar_p()
+  tmp_result = ctypes.windll.shell32.GetCurrentProcessExplicitAppUserModelID(
+    ctypes.byref(tmp_id)
+  )
+  assert tmp_result == 0, f"no AppUserModelID set (HRESULT {tmp_result:#x})"
+  tmp_value = tmp_id.value
+  ctypes.windll.ole32.CoTaskMemFree(tmp_id)
+  assert tmp_value == APP_USER_MODEL_ID, f"AppUserModelID is {tmp_value}"
 
 
 def check_certificates() -> None:
@@ -123,6 +226,10 @@ def check_gui(a_tmp_dir: str) -> str:
 try:
   check_bundled_modules_and_data()
   check_licenses()
+  check_app_user_model_id()
+  check_macos_bundle_executable()
+  check_macos_python_settings()
+  check_linux_settings()
   check_certificates()
   with tempfile.TemporaryDirectory() as tmp_dir:
     check_commands(tmp_dir)
