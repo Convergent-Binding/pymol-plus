@@ -21,7 +21,7 @@
 - **Movie row** (in the panel, the developer's choice): rewind, back, stop, play (Ctrl: from the start), forward, end (Ctrl: middle); toggles **S** (sequence viewer), rock, **F** (full screen); a readout "Frame 1/120 · 30.0 Hz", or "State n" without a movie.
 - **Mouse section:** the mouse mode as a pill (click: next mode, Shift-click: previous, right-click: the mouse configuration menu), the selection mode as a pill (click: next, Shift-click: previous), and a fold-out **binding table** (Buttons L M R Wheel against keys, single and double click) from the current mouse mode (board Bindings).
 - **Wizard section**, above the movie row while a wizard is active: its title, menu buttons and buttons, built from the wizard's `get_panel()` (board Wizard).
-- **Themes:** dark and light, following the app's theme.
+- **Themes:** dark and light, following the operating system's colour scheme.
 
 **Every internal GUI feature and its new place** (from `layer3/Executive.cpp` `CExecutive::click/release/drag`, `layer1/ButMode.cpp`, `layer1/Control.cpp`).
 
@@ -60,18 +60,19 @@
 **Decisions made with the developer.**
 
 - Keep the A S H L C buttons and their look; every internal GUI feature moves over.
-- The movie controls live in the panel, not in the toolbar; `features/command-palette.md`'s toolbar drops them.
+- The movie controls live in the panel, not in the toolbar; `features/command-palette.md`'s toolbar drops them in step 3 of this feature.
 - Built as approach B.
 - Small, purely additive read-only C++ functions are allowed where `cmd` cannot provide what the panel needs (reviewer question, accepted 2026-11-23).
 - `internal_gui` alone decides: the panel shows exactly while the internal GUI is off, never both. The app starts with it off; the existing Display → Internal GUI checkbox stays the switch and is remembered; an explicit command-line option or a `.pymolrc` wins over the remembered choice (reviewer question, accepted 2026-11-23).
 
 **Calls made in the design (Claude's, open to correction).**
 
+- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets exactly two marked segments, one at start-up that calls `pymol3.app.start(window)` and one in `update_feedback()` that hands every tick and every feedback batch to `pymol3.app.tick(window, feedback)`. Features register with `pymol3.app` instead of adding segments of their own; whichever feature lands first adds both segments and `pymol3.app`, and also `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet.
 - The remembered choice of Display → Internal GUI lives in the app's `QSettings('PyMOL-Open-Source', 'PyMOL-Open-Source')`; the panel follows `internal_gui` through the GUI's existing setting callbacks, so `reinitialize`, `.psw` files and scripts that change it are followed too.
 - The new C++ functions are reached from Python only through `pymol3` (for example `pymol3.query.object_tree()`, `mouse_bindings()`, `frame_rate()`); `modules/pymol/` stays untouched. Each C++ addition sits in its own clearly marked block so porting upstream changes stays simple.
 - The panel follows PyMOL's state by polling on the GUI's existing 500 ms tick and on the setting updates it already receives, as the scenes panel does; it does not call `get_setting_updates()` itself.
 - The mouse mode and selection mode stay in the panel, not the status bar.
-- **Themes** follow the operating system's colour scheme (`QStyleHints.colorScheme()`, Qt 6.5+, so PySide6 6.9 has it), light when the OS reports none; no theme setting of its own. A shared theme module for all `pymol3` panels is part of step 1.
+- **Themes** follow the operating system's colour scheme (`QStyleHints.colorScheme()`, Qt 6.5+, so PySide6 6.9 has it), light when the OS reports none; no theme setting of its own. The theme module built in step 2 applies to this panel; other `pymol3` panels may adopt it later.
 - Dragging a row into an open group or out of one groups or ungroups it, as the internal GUI does.
 - Every behaviour in the table above is in scope, cloaked rows and the label colour codes included.
 - Things drawn in the viewer stay there: the wizard prompt, the sequence viewer, scene buttons and the in-viewer command line are not part of this panel.
@@ -92,7 +93,7 @@ Quoted from AGENTS.md and the `pymol3-dock-panels` plan:
 
 - "App: PySide6 stays at 6.9 (6.10+ drops macOS 12 and RHEL/AlmaLinux 8); Python 3.13."
 - "`distribution/edited/` holds upstream PyMOL files with marked edits (`BEGIN EDITED CODE SEGMENT`)"; nothing under `modules/pymol/`, `modules/pmg_qt/`, `modules/pmg_tk/`, `modules/chempy/` or `modules/pymol2/` changes.
-- Upstream C++ only gains new, read-only functions in marked blocks (`layer4/Cmd.cpp` and the layer files that hold the data); no existing C++ function's behaviour changes.
+- Upstream C++ only gains new, read-only functions in blocks marked `BEGIN PYMOL+ ADDITION` / `END PYMOL+ ADDITION` (`layer4/Cmd.cpp` and the layer files that hold the data); no existing C++ function's behaviour changes. ADR `docs/decisions/0002-additive-cpp-entry-points.md` records this exception to ADR 0001.
 - C++ follows `opp-workflow:cpp-style` for the added code.
 - Never remove or change anything in PyMOL's existing command or Python API; only add.
 - Python follows `opp-workflow:python-style`; `python3 .opp/style/check.py --committed` passes on each step's last push.
@@ -127,8 +128,8 @@ Each step is one branch from `production` and one pull request into `production`
 
 1. **Read-only C++ getters** (`objects-panel-getters`): the object tree (every object's and selection's name, type, enabled and cloaked state, group membership, group open state, state count, in panel order), the current mouse bindings with their code names, and the measured frame rate, added to `_cmd` in marked blocks and wrapped in `pymol3.query`. Tested from Python against a real PyMOL; the wheel builds on every platform.
 2. **Object list and menus** (`objects-panel-list`): the panel, rows, eye and name clicks with their modifiers, paint visibility, middle-click, drag reorder with group and ungroup, groups through `cmd.group(..., action=open/close)`, filter, state badges, cloaked rows, name colours, A S H L C (and M) menus from `pymol.menu` for every object type with coloured labels, sync with PyMOL, the shared light and dark theme.
-3. **Movie and mouse** (`objects-panel-movie-mouse`): the movie row with its readout, the mouse and selection pills with their cycling, editing-mode and configuration behaviour, the binding table from `pymol3.query.mouse_bindings()`.
-4. **Wizards and the switch** (`objects-panel-wizards`): the wizard section from `get_panel()`, the start-up hook, the panel following `internal_gui`, and the remembered Display → Internal GUI choice with command-line and `.pymolrc` precedence.
+3. **Movie and mouse** (`objects-panel-movie-mouse`): the movie row with its readout, the mouse and selection pills with their cycling, editing-mode and configuration behaviour, the binding table from `pymol3.query.mouse_bindings()`, and removing the movie buttons and Rock from the command palette's toolbar if it exists.
+4. **Wizards and the switch** (`objects-panel-wizards`): the wizard section from `get_panel()`, the registration through the shared GUI hooks (adding them and `visible=` if this lands first; the panel starts hidden while `internal_gui` is on), the panel following `internal_gui`, and the remembered Display → Internal GUI choice with command-line and `.pymolrc` precedence.
 
 ## Review Focus
 
@@ -142,17 +143,17 @@ Each step is one branch from `production` and one pull request into `production`
 - The panel lists every object and selection as the internal GUI does, groups nested and foldable, `hide_underscore_names` respected.
 - Clicking an eye or a name, with and without Shift, Ctrl and Ctrl+Shift, and middle-clicking, does what the same click does in the internal GUI.
 - Dragging across the eyes paints visibility; dragging a row reorders the objects in PyMOL.
-- A S H L C open the same menus as the internal GUI for every object type, and their entries run the same commands; M appears with `movie_panel` on.
+- A S H L C open the same menus as the internal GUI for every object type, and their entries run the same commands; M appears in the mouse mode "3-Button Motions", and only then.
 - The movie row's buttons and toggles do what the internal GUI's do; the readout shows frame, rate and state.
 - The mouse and selection pills cycle as the internal GUI does; right-click opens the mouse configuration menu; the binding table matches the current mode.
 - A running wizard (Mutagenesis, Measurement, Sculpting) can be driven completely from the wizard section.
 - The app starts with the panel and without the internal GUI; Display → Internal GUI brings the internal GUI back (and hides the panel) and is remembered; `pymol -i` or a `.pymolrc` setting wins over the remembered choice.
 - The new C++ functions only add; every existing `cmd` function behaves as before.
-- No upstream file changes; `bazel test //...` and `bazel test //distribution/...` pass.
+- No upstream Python file changes (`modules/` outside `modules/pymol3/`); upstream C++ changes only by the marked, additive blocks in `## Scope`, each marked `BEGIN PYMOL+ ADDITION` / `END PYMOL+ ADDITION`; `bazel test //...` and `bazel test //distribution/...` pass.
 
 ## Verification
 
-- `bazel test //tests/...` runs the panel's offscreen Qt tests against a real PyMOL: rows and order, click modifiers, reorder, menu mapping per object type with the `%` prefix, menu commands, movie and mouse actions, wizard sections, sync without full rebuilds.
+- `bazel test //tests/...` runs the panel's offscreen Qt tests against a real PyMOL: rows and order, click modifiers, reorder, menu mapping per object type with plain names (no `%` prefix), menu commands, movie and mouse actions, wizard sections, sync without full rebuilds.
 - `bazel test //distribution/...` passes, `//distribution/edited:edited_base_test` included.
 - `python3 .opp/style/check.py --committed` reports no findings.
 - By hand in the app on Windows: the acceptance criteria above, side by side with the classic internal GUI.

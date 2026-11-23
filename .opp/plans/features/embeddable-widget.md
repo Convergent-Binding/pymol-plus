@@ -69,9 +69,9 @@ viewer.feedback.connect(log)                 # PyMOL's output
 Quoted from AGENTS.md and the `pymol3-dock-panels` plan:
 
 - No file under `modules/pymol/`, `modules/pmg_qt/`, `modules/pmg_tk/`, `modules/chempy/` or `modules/pymol2/` changes; the subclass lives in `pymol3`.
-- Upstream C++ only gains the pick queue and its `_cmd` reader, in marked blocks; no existing C++ function's behaviour changes. C++ follows `opp-workflow:cpp-style`.
+- Upstream C++ only gains the pick queue and its `_cmd` reader, in blocks marked `BEGIN PYMOL+ ADDITION` / `END PYMOL+ ADDITION`, as ADR `docs/decisions/0002-additive-cpp-entry-points.md` allows; no existing C++ function's behaviour changes. C++ follows `opp-workflow:cpp-style`.
 - Never remove or change anything in PyMOL's existing API; only add.
-- "New dependency versions only when they are at least 14 days old"; PyQt5, PyQt6 and PySide6 join only as test dependencies in `tools/bazel/requirements.in`, never as runtime dependencies of the wheel.
+- "New dependency versions only when they are at least 14 days old"; PyQt5 and PyQt6 join only as test dependencies in `tools/bazel/requirements.in` (PySide6-Essentials is there already), never as runtime dependencies of the wheel.
 - Python follows `opp-workflow:python-style`; `python3 .opp/style/check.py --committed` passes on each step's last push.
 - "Pull requests get the Bazel check only."
 - "Website: Material for MkDocs until the stable Zensical release (switch planned for March 2027); no Zensical code before that." The website is built by `mkdocs` in `docs.yaml`, not by Bazel.
@@ -116,7 +116,7 @@ Each step is one branch from `production` and one pull request into `production`
 
 - **The host's output hijacked.** `pcatch._install()` replaces `sys.stdout` for the whole process. Covered by a test that prints from the host after creating the widget and finds the text on the host's own stream.
 - **Keys swallowed or doubled.** With the viewer focused, PyMOL's shortcuts must work, and the host's own shortcuts (menus, QShortcuts) must still win. Covered by a test with a host QShortcut on Ctrl+O and a PyMOL arrow-key binding.
-- **The upstream base class changing.** A change to `PyMOLGLWidget.__init__` or its attributes can break the subclass silently. Covered by the step 1 tests running against the in-repo `pmg_qt` on every build.
+- **The upstream base class changing.** A change to `PyMOLGLWidget.__init__` or its attributes can break the subclass silently. Covered by the step 2 tests running against the in-repo `pmg_qt` on every build.
 - **A user's wizard blocked.** `picked` must keep working while a wizard such as Measurement is active, and the wizard must keep receiving its picks. Covered by a test with an active wizard.
 
 ## Acceptance criteria
@@ -124,10 +124,10 @@ Each step is one branch from `production` and one pull request into `production`
 - A plain PyQt6 or PySide6 `QMainWindow` with `PyMOLWidget` shows a fetched structure, rotates and zooms with the mouse, and reacts to PyMOL's keyboard shortcuts while focused.
 - `viewer.cmd` is `pymol.cmd`; `viewer.do()` runs command-language lines.
 - `picked`, `objects_changed`, `feedback` and `error` fire as described, and a wizard keeps working alongside `picked`.
-- Creating a second widget raises `RuntimeError`; after the first is destroyed, a new one can be created.
+- Creating a second widget raises `RuntimeError`, also after the first is destroyed.
 - The host's `sys.stdout` is unchanged after the widget starts.
 - The website page's example app runs as written.
-- No upstream file changes; `bazel test //...` passes.
+- No upstream Python file changes (`modules/` outside `modules/pymol3/`); upstream C++ changes only by the marked, additive blocks in `## Scope` (`BEGIN PYMOL+ ADDITION` / `END PYMOL+ ADDITION`); `bazel test //...` passes.
 
 ## Verification
 

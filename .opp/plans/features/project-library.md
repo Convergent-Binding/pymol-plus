@@ -2,7 +2,7 @@
 
 **Goal:** PyMOL+ keeps all work in a project library: a sidebar on the left lists projects and their sessions ("chats") like the Claude app's sidebar, every imported structure is copied into its project, every session saves itself, sessions can be forked, and projects can be exported and imported as ZIP files; no more loose session and structure files on the scientist's laptop.
 
-**Architecture:** A Qt-free module `pymol3.projects` owns the library on disk (project folders, a manifest per project, auto-saving, forking, ZIP export and import) and switches sessions in the one global PyMOL by saving the current session and loading the next. A `pymol3` panel docked on the left through `pymol3.ui.add_dock_panel(..., area="left")` shows it. Short marked hooks in the app's copy of `pymol_qt_gui.py` capture imports at `load_dialog()`, point `fetch_path` at the current project, and save on close.
+**Architecture:** A module `pymol3.projects` without a Qt requirement owns the library on disk (project folders, a manifest per project, auto-saving, forking, ZIP export and import) and switches sessions in the one global PyMOL by saving the current session and loading the next. A `pymol3` panel docked on the left through `pymol3.ui.add_dock_panel(..., area="left")` shows it. Short marked hooks in the app's copy of `pymol_qt_gui.py` capture imports at `load_dialog()`, point `fetch_path` at the current project, and save on close.
 
 **Tech Stack:** Python (`zipfile`, `json`, `pathlib`), `pymol.Qt` (PySide6 6.9 in the app; `QStandardPaths`, `QFile.moveToTrash`), `pymol3.ui`, Bazel (`rules_python`), pytest, with Qt's `offscreen` platform for the panel.
 
@@ -53,6 +53,7 @@
 
 **Calls made in the design (Claude's, open to correction).**
 
+- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets exactly two marked segments, one at start-up that calls `pymol3.app.start(window)` and one in `update_feedback()` that hands every tick and every feedback batch to `pymol3.app.tick(window, feedback)`. Features register with `pymol3.app` instead of adding segments of their own; whichever feature lands first adds both segments and `pymol3.app`, and also `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet.
 - Imports are copied, not linked; sessions never depend on `assets/`, which keeps the originals for order and traceability.
 - Fork shares assets; it copies only the session.
 - Auto-save every five minutes while changed, plus on switch and close; Ctrl+S saves at once.
@@ -91,7 +92,6 @@ Quoted from AGENTS.md and the `pymol3-dock-panels` plan:
 modules/pymol3/**
 tests/pymol3_*/**
 distribution/edited/pmg_qt/pymol_qt_gui.py
-distribution/edited/pmg_qt/pymol_gl_widget.py
 
 ## Done
 
@@ -103,16 +103,16 @@ All three steps below are merged into `production`, and a fresh app start opens 
 - Copying files that scripts or plugins load with `cmd.load`.
 - Sharing or syncing projects between people beyond ZIP export and import; no conflict handling for libraries in synced folders beyond what the file system gives.
 - Version history of a session beyond forks.
-- Wheel users' GUI: the hooks are in the app's edited copy only; `pymol3.projects` is usable from Python by anyone.
+- Wheel users' GUI: the hooks are in the app's edited copy only; `pymol3.projects` is usable from Python by anyone, also without Qt: its seam uses `QStandardPaths` and `QFile.moveToTrash` when Qt is present and falls back to the platform's Documents folder and a `.trash` folder in the library otherwise.
 - Migrating loose files already on the laptop automatically; they come in as the user opens them.
 
 ## Steps
 
 Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts. Until step 2, nothing changes for the user.
 
-1. **Library core** (`project-library-core`): `pymol3.projects` without Qt beyond `QStandardPaths`/`QFile.moveToTrash` behind a small seam: library location, project folders and manifest, Unsorted, chats (create, rename, move, fork, delete to trash), switching by save and load, auto-save rules, export of a session, ZIP export and import of a project. Tested headless against a real PyMOL and a temporary library.
-2. **Sidebar and start-up** (`project-library-sidebar`): the left panel, the start-up hook that opens the last chat (or creates Unsorted), `session_file` and the window title, saving on close, the five-minute auto-save, Ctrl+S, and Save Session As… as export.
-3. **Imports, library location and project ZIPs in the GUI** (`project-library-imports`): the `load_dialog()` hook that copies structures into `assets/` and turns opened `.pse` files into chats, `fetch_path` following the current project, File → Library location…, File → Import project…, and Export project… / Export session… in the sidebar.
+1. **Library core** (`project-library-core`): `pymol3.projects` with its Qt seam and non-Qt fallback: library location, project folders and manifest, Unsorted, chats (create, rename, move, fork, delete to trash), the per-chat lock file with stale-lock clearing, switching by save and load, auto-save rules, export of a session, ZIP export and import of a project. Tested headless against a real PyMOL and a temporary library.
+2. **Sidebar and start-up** (`project-library-sidebar`): the left panel (starting hidden with `visible=False` until the library is ready), registration through the shared GUI hooks (adding them and `visible=` if this lands first), opening the last chat (or creating Unsorted), the second-process rule (a new chat in Unsorted, launch files in it, locked chats greyed), `session_file` and the window title, saving on close, the five-minute auto-save, Ctrl+S, and Save Session As… as export.
+3. **Imports, library location and project ZIPs in the GUI** (`project-library-imports`): the `load_dialog()` hook that copies structures into `assets/` and turns opened `.pse` files into chats, `fetch_path` following the current project, the plugin repository's downloads sent to their own folder by wrapping `pymol.plugins.repository.fetchscript` from `pymol3`, File → Library location…, File → Import project…, and Export project… / Export session… in the sidebar.
 
 ## Review Focus
 

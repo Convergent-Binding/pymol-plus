@@ -20,12 +20,12 @@
   - Arguments get suggestions: names of loaded objects and selections, colour names, representations and other fixed value sets.
   - **Hybrid input (developer's choice, option C).** Typing works like a command line: a complete line such as `color red, chain A` runs on Enter. Picking a command from the list asks for **every positional argument in turn** (colour → which atoms), each pre-filled with its default and offered with suggestions; Tab or Enter accepts the shown value and moves on, so an optional argument costs one key. A value the search matched is filled in already: searching "surface" and picking `show` gives `show surface,` and asks only for the atoms.
   - Esc closes the palette without running anything.
-- **Go to (Ctrl+G).** Opens the palette in go-to mode: the list starts with all loaded objects and named selections; the field also accepts addresses (`A/45`, `HEM`) and any selection string (`resn HEM within 5 of chain B`). Enter zooms the view to the target and makes it the current selection `sele`, as a click would, so the next command applies to it.
+- **Go to (Ctrl+G).** Opens the palette in go-to mode: the list starts with all loaded objects and named selections; the field also accepts short addresses and any selection string (`resn HEM within 5 of chain B`). Go-to parses its own short address syntax and translates it before handing it to PyMOL, because PyMOL reads a macro without a leading slash from the right (`layer3/Selector.cpp`): `A/45` means chain A, residue 45 (PyMOL: `chain A and resi 45`); a bare word that names no object or selection means a residue name (`HEM` → `resn HEM`); anything else is passed as a selection. Enter zooms the view to the target and makes it the current selection `sele`, as a click would, so the next command applies to it.
 - **Bottom panel (output).** Ctrl+J or the bottom-panel toggle opens and closes it; closed by default. It shows PyMOL's output, read-only, selectable and copyable, with Clear and Search. Python tracebacks and `Error:` lines are shown in red. PyMOL catches command errors and only prints them, so the panel watches the output: on **any** traceback or `Error:` line, whether from the palette, a script, a plugin or a mouse action, it opens by itself and shows it. A "Don't open on errors" option in the panel turns this off for noisy plugins. Commands are entered only through the palette: the panel has no command line.
 - **Toolbar.** A slim, standard Qt toolbar below the menu bar, which the user can hide or move:
   - on the left, a search button with a magnifying glass, styled as a field ("Search commands… Ctrl+Shift+P"), which opens the palette;
   - the External GUI's quick buttons with icons and text: Reset, Zoom, Orient, Draw/Ray, Unpick, Deselect, Get View, MClear, Builder, Properties, Rebuild; every one also exists as a palette entry. The movie controls (`|<`, `<`, Stop, Play, `>`, `>|`) and Rock live in the Objects panel's movie row instead (`features/objects-panel.md`, decided 2026-11-23); until that panel exists, the toolbar carries them;
-  - on the right, VS Code's three layout toggles: left side, bottom panel, right side. Left and right show or hide every `pymol3` panel docked in that area; bottom shows or hides the output panel.
+  - on the right, VS Code's three layout toggles: left side, bottom panel, right side. Hiding an area hides the panels visible in it now and remembers them; showing it again restores exactly those. A panel may refuse to show (the Objects panel while the internal GUI is on, `objects-panel.md`), and a panel the user closed stays closed. Bottom shows or hides the output panel.
 - **Status bar.** The progress bar and the red Abort button move from the External GUI into the window's status bar, always visible, so a long ray trace or calculation can always be stopped.
 - **External GUI as legacy.** A remembered setting, **Display → External GUI → Show at start**, decides whether the External GUI appears. It defaults to off for **every** installation, updated ones included: the app cannot tell an update from a fresh install without installer changes. At the first start of the version that turns it off, a one-time notice says "The External GUI is now off. Commands: Ctrl+Shift+P, output: Ctrl+J" with a button that switches it back on; the notice's having been shown is remembered in the same `QSettings` store. Everything it offered stays reachable: commands through the palette, output in the bottom panel, buttons in the toolbar, progress in the status bar.
 
@@ -49,9 +49,10 @@
 
 **Calls made in the design (Claude's, open to correction).**
 
-- The External GUI defaults to off in new installations; the setting is stored in the app's existing `QSettings('PyMOL-Open-Source', 'PyMOL-Open-Source')` (already used by `offer_to_remove_older_apps`).
+- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets exactly two marked segments, one at start-up that calls `pymol3.app.start(window)` and one in `update_feedback()` that hands every tick and every feedback batch to `pymol3.app.tick(window, feedback)`. Features register with `pymol3.app` instead of adding segments of their own; whichever feature lands first adds both segments and `pymol3.app`, and also `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet.
+- The External GUI defaults to off in every installation, updated ones included (see Decisions); the setting is stored in the app's existing `QSettings('PyMOL-Open-Source', 'PyMOL-Open-Source')` (already used by `offer_to_remove_older_apps`).
 - Ctrl+J toggles the bottom panel, as in VS Code.
-- The bottom panel opens by itself on a failed command.
+- The bottom panel opens by itself on any traceback or `Error:` line, unless "Don't open on errors" is set (see Decisions).
 - After a go-to jump the target becomes `sele`.
 - Progress and Abort live in the status bar, whatever the External GUI setting.
 - Recent commands rank first in the palette. They are kept across restarts in the same `QSettings` store (the last 100 distinct command lines); the External GUI's in-memory history (`_setup_history`, at most 255 entries, not saved) stays as it is and is not merged with them.
@@ -96,7 +97,7 @@ All four steps below are merged into `production`, and a fresh app install start
 - Removing the External GUI or the in-viewport command line; both stay as legacy.
 - Searching menus, settings or plugin actions in the palette (commands, quick buttons and go-to only, for now).
 - User-defined key bindings or a keyboard-shortcut editor.
-- Theming beyond what PyMOL's current Qt style gives (no new light/dark themes).
+- Theming beyond what PyMOL's current Qt style gives, unless this feature adopts the light and dark theme module of `objects-panel.md` once it exists.
 - The Tk GUI and `pymol -c`.
 
 ## Steps
@@ -104,10 +105,10 @@ All four steps below are merged into `production`, and a fresh app install start
 Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts. Every step leaves the app usable: the External GUI stays on by default until step 3, so nobody is left without a command input.
 
 0. **Prerequisite (met):** `pymol3-dock-panels` merged into `production` (Convergent-Binding/pymol-plus#15), with the `pymol3` package and `pymol3.ui`.
-1. **Palette** (`command-palette`): the popup, the command index (names, argument signatures, help descriptions), ranking with recent commands first, argument suggestions, the hybrid input, Ctrl+Shift+P, and the hook in the edited GUI that installs it. Done when the palette runs commands in the app beside the unchanged External GUI.
-2. **Bottom panel and layout toggles** (`command-output-panel`): the output panel docked at the bottom through `pymol3.ui`, fed by the feedback hook; red tracebacks and `Error:` lines; Clear and Search; Ctrl+J; opening by itself on a failed command; the three layout toggles as actions (placed in the toolbar in step 3, reachable from the menu until then).
-3. **Toolbar, status bar and the legacy setting** (`command-toolbar`): the toolbar with the search button, quick buttons and layout toggles; progress and Abort in the status bar; the "Show at start" setting, default off, honouring an explicit command-line choice.
-4. **Go to** (`command-goto`): Ctrl+G and the go-to mode with objects, selections, addresses and selection strings; jump and `sele`.
+1. **Palette** (`command-palette`): the popup, the command index (names, argument signatures, help descriptions), ranking with recent commands first, argument suggestions, the hybrid input, Ctrl+Shift+P, and its registration through the shared GUI hooks (adding them if this lands first). Done when the palette runs commands in the app beside the unchanged External GUI.
+2. **Bottom panel and layout toggles** (`command-output-panel`): the output panel docked at the bottom through `pymol3.ui` and hidden at start (`visible=False`, added by whichever feature lands first), fed by the feedback fan-out of the shared `pymol3.app.tick` hook; red tracebacks and `Error:` lines; Clear and Search; Ctrl+J; opening by itself on any traceback or `Error:` line, with the "Don't open on errors" option; the three layout toggles as actions with the remember-and-restore behaviour (placed in the toolbar in step 3, reachable from the menu until then).
+3. **Toolbar, status bar and the legacy setting** (`command-toolbar`): the toolbar with the search button, the quick buttons listed in Design and the layout toggles; progress and Abort in the status bar; the "Show at start" setting, default off for every installation, honouring an explicit command-line choice; the one-time notice with its button that switches the External GUI back on.
+4. **Go to** (`command-goto`): Ctrl+G and the go-to mode with objects, selections, short addresses (its own parser, tested on `A/45`, `B/100-120`, `HEM` and names that are objects) and selection strings; jump and `sele`.
 
 ## Review Focus
 
@@ -122,10 +123,10 @@ Each step is one branch from `production` and one pull request into `production`
 - Ctrl+Shift+P and the toolbar's search button open the palette from anywhere in the main window, the viewer included.
 - Typing "surface" lists `show`/`hide` with surface among the top results; typing a full command line and Enter runs it.
 - Picking `color` from the list asks for the colour, then for the atoms, each with suggestions, and runs the command.
-- Ctrl+G lists loaded objects and selections; entering `A/45` or a selection string zooms to it and sets `sele`.
+- Ctrl+G lists loaded objects and selections; entering `A/45` (chain A, residue 45), `HEM` or a selection string zooms to it and sets `sele`.
 - Searching "surface" and picking `show` fills in `show surface,` and asks only for the atoms; Tab or Enter on a pre-filled default moves on.
 - Ctrl+J opens and closes the bottom panel; any traceback or `Error:` line opens it and shows in red, unless "Don't open on errors" is set.
-- The toolbar holds the search button, every former quick button and the three layout toggles; progress and Abort show in the status bar during a ray trace.
+- The toolbar holds the search button, the quick buttons listed in Design and the three layout toggles; progress and Abort show in the status bar during a ray trace.
 - A fresh install and an updated one both start without the External GUI; the one-time notice shows once and its button brings the External GUI back; switching "Show at start" on brings it back after a restart.
 - No upstream file changes (`modules/` outside `modules/pymol3/`); `bazel test //...` and `bazel test //distribution/...` pass.
 

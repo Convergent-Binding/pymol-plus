@@ -14,8 +14,8 @@
 
 **What the user sees.**
 
-- **Live mode.** **Plugin → Allow Claude to control PyMOL+** switches it on (off by default, remembered); the status bar shows "Claude connected" while a client is attached, with a button to disconnect. Commands Claude runs appear in the output panel and the command history like typed ones.
-- **Headless mode.** When no PyMOL+ with live mode is open, or when Claude is asked for it (`mode="headless"`), the server starts its own windowless PyMOL (`pymol -cq` with the bridge) and stops it when the session ends.
+- **Live mode.** **Plugin → Allow Claude to control PyMOL+** switches it on (off by default, remembered); the status bar shows "Claude connected" while a client is attached, with a button to disconnect. Commands Claude runs appear in the output panel and the command history like typed ones. The Plugin menu entries are added after `initializePlugins()`, which clears `menudict['Plugin']` (`pymol_qt_gui.py`), to `menudict['PluginQt']`.
+- **Headless mode.** When no PyMOL+ with live mode is open, or when Claude is asked for it (`mode="headless"`), the server starts its own windowless PyMOL that stays alive (`pymol -cqK` with the bridge started as a thread from a `-d`/startup script, since a bare `pymol -cq` exits when its input ends) and stops it when the session ends.
 - **Tools** (the same in both modes):
   - `run_pymol` – run any PyMOL command-language lines, Python and shell included (developer's choice), returning output and errors;
   - `run_python` – run Python in PyMOL's interpreter with `cmd` available, returning output and the value of the last expression;
@@ -42,6 +42,7 @@
 
 **Calls made in the design (Claude's, open to correction).**
 
+- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets exactly two marked segments, one at start-up that calls `pymol3.app.start(window)` and one in `update_feedback()` that hands every tick and every feedback batch to `pymol3.app.tick(window, feedback)`. Features register with `pymol3.app` instead of adding segments of their own; whichever feature lands first adds both segments and `pymol3.app`, and also `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet.
 - Safeguards that cost no flexibility: live mode is off by default and switched on in the app's menu; each new connection is confirmed in the app (see Decisions); the bridge listens only on the local machine (a local socket, or `localhost` TCP), with a random token written to a file only the user can read; Claude Code's own permission prompt asks before tool calls unless the user allows them.
 - The bridge runs each request on its own worker thread under PyMOL's API lock (as PyMOL's own threads and plugins do), so the GUI stays responsive: the user can keep working, Disconnect works, and a second client is told "already connected".
 - Timeouts (default 120 s, per tool call adjustable): the bridge first calls `cmd.interrupt()` (stops ray tracing and other C work), then raises an exception in the request's thread (`PyThreadState_SetAsyncExc`, which ends Python loops and sleeps), and reports the timeout. A shell command it started cannot be ended that way and is reported as still running; in headless mode the server can end the whole child process.
@@ -50,7 +51,7 @@
 - Several PyMOL+ windows with live mode on: each writes its own discovery file (process id, socket, token) in the user's runtime folder; the server attaches to the most recently started one, and `list_instances` plus `connect(instance=…)` choose another.
 - `render_image` returns PNG at most 1600 px on the long side by default, to keep it light for the model.
 - `pymol3.mcp` and its dependencies are an optional extra of the wheel (`pip install "pymol-open-source-whl[mcp]"`) and are included in the app; the wheel's console script and the app's console launcher are both called `pymol-mcp`.
-- The plugin and its marketplace file live in this repository under `integrations/claude-code/`, so `claude plugin marketplace add Convergent-Binding/pymol-plus` finds them.
+- The plugin lives under `integrations/claude-code/`; the marketplace file is `.claude-plugin/marketplace.json` at the repository root, pointing at it, which is where `claude plugin marketplace add Convergent-Binding/pymol-plus` looks.
 - One client at a time in live mode; a second gets a clear "already connected" error.
 
 **Facts from the code that bind the design.**
@@ -108,9 +109,9 @@ All three steps below are merged into `production`; Claude Code with the plugin 
 
 Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts.
 
-1. **The bridge and live mode** (`mcp-bridge`): `pymol3.bridge` (protocol, token, discovery files, local socket, worker-thread execution under the API lock, timeouts, capturing output, errors and images), the menu toggle, the per-connection question, the status indicator and disconnect, and the same bridge in a headless `pymol -cq` process.
+1. **The bridge and live mode** (`mcp-bridge`): `pymol3.bridge` (protocol, token, discovery files, local socket, worker-thread execution under the API lock, timeouts, capturing output through the shared `pymol3.app.tick` feedback fan-out, errors and images), registration through the shared GUI hooks (adding them if this lands first), the menu toggle, the per-connection question, the status indicator and disconnect, and the same bridge in a headless PyMOL kept alive with `-K`.
 2. **The MCP server** (`mcp-server`): `pymol3.mcp` with the tools, `connect` and `list_instances`, discovery of a live PyMOL+ and the headless fallback, the `mcp` extra in the wheel with its `pymol-mcp` console script, the app's bundle and its licence files, the app's console launcher `pymol-mcp` and the menu entry that installs it on the `PATH`.
-3. **The Claude Code plugin and docs** (`mcp-plugin`): the plugin under `integrations/claude-code/` (manifest, `.mcp.json`, skills), the marketplace file, and a website page on using PyMOL+ with Claude.
+3. **The Claude Code plugin and docs** (`mcp-plugin`): the plugin under `integrations/claude-code/` (manifest, `.mcp.json`, skills), `.claude-plugin/marketplace.json` at the repository root, and a website page on using PyMOL+ with Claude.
 
 ## Review Focus
 
@@ -127,11 +128,11 @@ Each step is one branch from `production` and one pull request into `production`
 - The bridge refuses connections without the right token; live mode is off until switched on, each new connection is confirmed in the app (refused after 60 seconds without an answer), and the app shows when Claude is connected.
 - Plugin → Install `pymol-mcp` command makes `pymol-mcp` runnable from a new terminal on Windows, macOS and Linux; `pip install "pymol-open-source-whl[mcp]"` gives the same command.
 - The plugin installs from this repository's marketplace and its skills are available in Claude Code.
-- No upstream file changes; `bazel test //...` and `bazel test //distribution/...` pass.
+- No upstream file changes (the app hooks are in `distribution/edited/`); `bazel test //...` and `bazel test //distribution/...` pass.
 
 ## Verification
 
-- `bazel test //tests/...` runs the bridge tests (token, local-only binding, GUI-thread execution, output capture, timeout) against a headless PyMOL, and the MCP server tests through an MCP client over stdio in both modes.
+- `bazel test //tests/...` runs the bridge tests (token, local-only binding, worker-thread execution under the API lock with the GUI responsive during a request, output capture, timeout) against a headless PyMOL, and the MCP server tests through an MCP client over stdio in both modes.
 - `bazel test //distribution/...` passes, the app's smoke test included.
 - `python3 .opp/style/check.py --committed` reports no findings.
 - By hand: Claude Code with the plugin against the app on Windows and macOS, live and headless.

@@ -2,7 +2,7 @@
 
 **Goal:** A panel docked on the right lists every PyMOL scene with its thumbnail and name, scrolls when the list is long, and lets the user create, recall, update, rename, reorder (by dragging) and remove scenes; it replaces the floating Scenes window as the place to manage scenes.
 
-**Architecture:** A new module in the `pymol3` package docks a Qt list view through `pymol3.ui.add_dock_panel(..., area="right")` and talks to PyMOL only through its scene commands (`scene`, `scene_order`, `get_scene_list`, `get_scene_thumbnail`). One marked hook in the app's copy of `pymol_qt_gui.py` makes **Scene → Scenes…** open the panel instead of the old window.
+**Architecture:** A new module in the `pymol3` package docks a Qt list view through `pymol3.ui.add_dock_panel(..., area="right")` and talks to PyMOL only through its scene commands (`scene`, `scene_order`, `get_scene_list`, `get_scene_thumbnail`). Two marked hooks in the app's copy of `pymol_qt_gui.py`: the panel registers through the shared start-up hook, and `scene_panel_menu_dialog()` makes **Scene → Scenes…** open the panel instead of the old window.
 
 **Tech Stack:** Python, `pymol.Qt` (PySide6 6.9 in the app), `pymol3.ui`, Bazel (`rules_python`), pytest with Qt's `offscreen` platform as in `tests/pymol3_ui/`.
 
@@ -40,12 +40,13 @@
 
 **Calls made in the design (Claude's, open to correction).**
 
+- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets exactly two marked segments, one at start-up that calls `pymol3.app.start(window)` and one in `update_feedback()` that hands every tick and every feedback batch to `pymol3.app.tick(window, feedback)`. Features register with `pymol3.app` instead of adding segments of their own; whichever feature lands first adds both segments and `pymol3.app`, and also `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet.
 - The panel stays in sync with scene changes made anywhere (palette, scripts, PgUp/PgDn, the scene buttons) and highlights the current scene.
 - **Scene → Scenes…** opens the new panel; the old window is no longer reachable from the menu, but its upstream file stays unchanged.
-- The panel is closed at start and opens by itself, once per app run, on the first scene created (in the panel, the palette, a script or Ctrl+F1) or on opening a session (.pse) that holds scenes. Once the user closes it, it stays closed until the next start unless opened by hand.
+- The panel is closed at start and opens by itself, once per app run, on the first scene created (in the panel, the palette, a script or Ctrl+F1) or on opening a session (.pse) that holds scenes. With the project library (`project-library.md`), which reopens the last chat at start, that means the panel opens at start whenever that chat holds scenes. Once the user closes it, it stays closed until the next start unless opened by hand.
 - The scene message is a read-only tooltip.
 - Update has no key shortcut, because Ctrl+S saves the session.
-- The panel is created at start by a second short marked hook in the edited GUI, next to where the command palette installs itself (whichever branch lands first adds the segment, the other extends it), and registers its `setting_callbacks`. It starts hidden: `pymol3.ui.add_dock_panel()` gains an optional keyword `visible=True`, an addition that changes no existing call.
+- The panel is created at start through the shared start-up hook (see Shared GUI hooks) and registers its `setting_callbacks`. It starts hidden: `pymol3.ui.add_dock_panel()` gains an optional keyword `visible=True`, an addition that changes no existing call.
 
 **Facts from the code that bind the design.**
 
@@ -54,7 +55,7 @@
 - PyMOL never refuses a rename: `MovieSceneRename` silently overwrites a scene that already has the new name and drops it from the order, and an empty `new_key` deletes the scene. The panel's own check is the only protection.
 - `scene <name>, update` keeps only the message of the scene now on screen (`_scene_get_current_message` in `modules/pymol/viewing.py`), so updating another scene would erase or copy messages; the panel passes `message=cmd.get_scene_message(name)` explicitly. Update also makes that scene the current one.
 - A thumbnail is taken on the next redraw (`SceneDeferImage`), so `get_scene_thumbnail()` right after a store can be empty; it is also empty for scenes from old sessions. The panel shows a placeholder and fetches again on a later tick until a thumbnail arrives.
-- `CTRL-F2` … are PyMOL shortcuts that store scenes `F1`…`F12` (`modules/pymol/shortcut_dict.py`); these scenes appear in the panel like any other.
+- `CTRL-F1`…`CTRL-F12` are PyMOL shortcuts that store scenes `F1`…`F12` (`modules/pymol/shortcut_dict.py`); these scenes appear in the panel like any other.
 
 ## Global Constraints
 
@@ -89,7 +90,7 @@ The scenes panel is merged into `production`, and Scene → Scenes… opens it i
 
 One step, one branch `scenes-panel` from `production`, one pull request into `production`; its Superpowers plan goes to `.opp/plans/scenes-panel.md` when it starts.
 
-1. **Scenes panel** (`scenes-panel`): the panel module, the list with thumbnails and scrolling, the six operations, sync with outside changes, opening on the first new scene, and the hook in `scene_panel_menu_dialog()`. It does not depend on the command palette's steps; once the palette's layout toggles exist, the right toggle covers this panel without further work.
+1. **Scenes panel** (`scenes-panel`): the panel module, the list with thumbnails and scrolling, the six operations, sync with outside changes, opening on the first new scene, the start-up registration through the shared GUI hooks (adding them and `visible=` if this lands first), and the hook in `scene_panel_menu_dialog()`. It does not depend on the command palette's steps; once the palette's layout toggles exist, the right toggle covers this panel without further work.
 
 ## Review Focus
 
