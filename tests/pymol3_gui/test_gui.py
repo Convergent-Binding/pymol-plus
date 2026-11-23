@@ -9,8 +9,11 @@ import pymol
 
 from pymol3 import gui
 
-# Skips this module without a Qt binding; the fixtures make the window.
-qt = pytest.importorskip("pymol.Qt", exc_type=ImportError)
+from . import qt_binding
+
+# Skips this module without a Qt binding, unless the setup requires one;
+# the fixtures make the window.
+qt = qt_binding.import_qt()
 """The Qt binding PyMOL found."""
 
 _AREA = qt.QtCore.Qt.DockWidgetArea

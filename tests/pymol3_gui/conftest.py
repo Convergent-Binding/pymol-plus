@@ -12,6 +12,8 @@ import pytest
 
 import pymol.gui
 
+from . import qt_binding
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 
@@ -26,7 +28,7 @@ def _make_window(monkeypatch: pytest.MonkeyPatch, with_menus: bool):
   Returns:
     The main window.
   """
-  tmp_qt = pytest.importorskip("pymol.Qt", exc_type=ImportError)
+  tmp_qt = qt_binding.import_qt()
   if tmp_qt.QtWidgets.QApplication.instance() is None:
     tmp_qt.QtWidgets.QApplication(["pymol3-tests"])
   tmp_window = tmp_qt.QtWidgets.QMainWindow()

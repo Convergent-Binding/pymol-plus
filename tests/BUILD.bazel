@@ -41,8 +41,12 @@ py_test(
         "//modules/pymol:cmd_extension_for_run",
         "//modules/pymol:runtime_data_for_run",
     ],
-    # The pymol3 GUI tests draw nothing on a real display.
-    env = {"QT_QPA_PLATFORM": "offscreen"},
+    # The pymol3 GUI tests draw nothing on a real display, and fail rather
+    # than skip when the PySide6 they get here does not load.
+    env = {
+        "PYMOL3_TESTS_REQUIRE_QT": "1",
+        "QT_QPA_PLATFORM": "offscreen",
+    },
     main = "pytest_main.py",
     deps = [
         ":qt_site_packages_lib",
