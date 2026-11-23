@@ -162,6 +162,7 @@ def add_dock_panel(
   Raises:
     pymol.plugins.QtNotAvailableError: PyMOL runs without its Qt window.
     ValueError: The area is none of the four, or the id is in use.
+    TypeError: The widget is no Qt widget.
     RuntimeError: The call came from another thread than the GUI thread.
   """
   tmp_window = _qt_window()
@@ -176,7 +177,13 @@ def add_dock_panel(
     raise ValueError(f"a dock panel with id {tmp_panel_id!r} exists already")
   tmp_dock_widget = tmp_qt.QtWidgets.QDockWidget(title, tmp_window)
   tmp_dock_widget.setObjectName(f"pymol3_panel_{tmp_panel_id}")
-  tmp_dock_widget.setWidget(widget)
+  try:
+    tmp_dock_widget.setWidget(widget)
+  except TypeError:
+    # A widget Qt refuses leaves no empty dock widget in the window.
+    tmp_dock_widget.setParent(None)
+    tmp_dock_widget.deleteLater()
+    raise
   tmp_window.addDockWidget(tmp_area, tmp_dock_widget)
   if floating:
     tmp_dock_widget.setFloating(True)

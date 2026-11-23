@@ -16,6 +16,15 @@ REQUIRE_QT_VARIABLE = "PYMOL3_TESTS_REQUIRE_QT"
 """The environment variable that turns a missing Qt binding into a failure."""
 
 
+def qt_required() -> bool:
+  """Tells whether a missing Qt binding fails the tests.
+
+  Returns:
+    True when ``PYMOL3_TESTS_REQUIRE_QT`` is ``1``, False otherwise.
+  """
+  return os.environ.get(REQUIRE_QT_VARIABLE) == "1"
+
+
 def import_qt() -> types.ModuleType:
   """Imports ``pymol.Qt``, the Qt binding PyMOL found.
 
@@ -26,6 +35,6 @@ def import_qt() -> types.ModuleType:
     ImportError: No binding loads and ``PYMOL3_TESTS_REQUIRE_QT`` is set;
       without it the calling test or module is skipped instead.
   """
-  if os.environ.get(REQUIRE_QT_VARIABLE):
+  if qt_required():
     return importlib.import_module("pymol.Qt")
   return pytest.importorskip("pymol.Qt", exc_type=ImportError)

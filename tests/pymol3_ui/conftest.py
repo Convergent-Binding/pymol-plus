@@ -16,6 +16,9 @@ from . import qt_binding
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+_APPLICATION = []
+"""The QApplication the fixtures made, kept alive for the whole session."""
+
 
 def _make_window(monkeypatch: pytest.MonkeyPatch, with_menus: bool):
   """Makes a shown main window and makes PyMOL return it as its window.
@@ -30,7 +33,8 @@ def _make_window(monkeypatch: pytest.MonkeyPatch, with_menus: bool):
   """
   tmp_qt = qt_binding.import_qt()
   if tmp_qt.QtWidgets.QApplication.instance() is None:
-    tmp_qt.QtWidgets.QApplication(["pymol3-tests"])
+    # PyQt deletes an application nothing refers to; keep it for the session.
+    _APPLICATION.append(tmp_qt.QtWidgets.QApplication(["pymol3-tests"]))
   tmp_window = tmp_qt.QtWidgets.QMainWindow()
   tmp_window.setCentralWidget(tmp_qt.QtWidgets.QWidget())
   if with_menus:

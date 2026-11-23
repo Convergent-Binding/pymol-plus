@@ -380,3 +380,101 @@ def test_panel_methods_from_worker_thread_raise_runtime_error(
   assert "GUI thread" in str(tmp_exception)
   assert tmp_panel.is_visible()
   assert ui.get_dock_panel("Sequences") is tmp_panel
+
+
+def _tab_titles_and_current(window) -> list:
+  """Lists the tab bars of the window's docked tabs.
+
+  Args:
+    window: The window PyMOL returns.
+
+  Returns:
+    One pair per tab bar: its tab titles and the current tab's title.
+  """
+  qt.QtWidgets.QApplication.processEvents()
+  return [
+      (
+          [tmp_bar.tabText(tmp_index) for tmp_index in range(tmp_bar.count())],
+          tmp_bar.tabText(tmp_bar.currentIndex()),
+      )
+      for tmp_bar in window.findChildren(qt.QtWidgets.QTabBar)
+      if tmp_bar.count() > 0
+  ]
+
+
+def test_show_raises_panel_tabbed_behind(main_window):
+  """show() brings a panel tabbed behind another to the front.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_first = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_second = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts")
+  tmp_second.show()
+  assert ([["Sequences", "Contacts"], "Contacts"]
+          in [list(tmp_pair) for tmp_pair in _tab_titles_and_current(
+              main_window)])
+  tmp_first.show()
+  assert ([["Sequences", "Contacts"], "Sequences"]
+          in [list(tmp_pair) for tmp_pair in _tab_titles_and_current(
+              main_window)])
+
+
+def test_panel_tabbed_behind_counts_as_visible(main_window):
+  """A panel behind another tab still counts as shown.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_first = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_second = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts")
+  tmp_second.show()
+  assert tmp_first.is_visible()
+
+
+def test_floating_panel_docks_back_into_its_area(main_window):
+  """A panel that starts floating docks back into the area asked for.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_panel = ui.add_dock_panel(
+      qt.QtWidgets.QLabel(), "Sequences", area="bottom", floating=True
+  )
+  tmp_panel.dock_widget.setFloating(False)
+  assert (
+      main_window.dockWidgetArea(tmp_panel.dock_widget)
+      == _AREA.BottomDockWidgetArea
+  )
+
+
+def test_remove_deletes_the_plugin_widget(main_window):
+  """remove() deletes the dock widget and the plugin's widget with it.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_label = qt.QtWidgets.QLabel()
+  tmp_destroyed = []
+  tmp_label.destroyed.connect(lambda *_: tmp_destroyed.append(True))
+  tmp_panel = ui.add_dock_panel(tmp_label, "Sequences")
+  tmp_panel.remove()
+  qt.QtCore.QCoreApplication.sendPostedEvents(
+      None, qt.QtCore.QEvent.Type.DeferredDelete
+  )
+  assert tmp_destroyed == [True]
+
+
+def test_widget_that_is_no_widget_leaves_no_dock(main_window):
+  """A non-widget raises TypeError and leaves no dock widget behind.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  with pytest.raises(TypeError):
+    ui.add_dock_panel(object(), "Sequences")
+  qt.QtCore.QCoreApplication.sendPostedEvents(
+      None, qt.QtCore.QEvent.Type.DeferredDelete
+  )
+  assert main_window.findChildren(qt.QtWidgets.QDockWidget) == []
+  assert ui.get_dock_panel("Sequences") is None

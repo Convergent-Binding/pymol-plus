@@ -12,6 +12,8 @@ import pymol.gui
 from pymol import plugins
 from pymol3 import ui
 
+from . import qt_binding
+
 
 def test_import_needs_no_qt_binding():
   """Importing pymol3.ui loads no Qt binding.
@@ -69,3 +71,30 @@ def test_import_in_pymol_namespace_keeps_pymol_gui():
   finally:
     tmp_namespace.clear()
     tmp_namespace.update(tmp_before)
+
+
+def test_get_dock_panel_without_qt_window_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+):
+  """Without PyMOL's Qt window there is no panel to find.
+
+  Args:
+    monkeypatch: Makes PyMOL report no Qt window.
+  """
+  monkeypatch.setattr(pymol.gui, "get_qtwindow", lambda: None)
+  assert ui.get_dock_panel("anything") is None
+
+
+@pytest.mark.parametrize(
+    ("value", "required"), [("1", True), ("0", False), ("", False)]
+)
+def test_require_qt_variable_counts_only_one(monkeypatch, value, required):
+  """Only PYMOL3_TESTS_REQUIRE_QT=1 turns a missing binding into a failure.
+
+  Args:
+    monkeypatch: Sets the variable.
+    value: The variable's value.
+    required: Whether the value requires Qt.
+  """
+  monkeypatch.setenv(qt_binding.REQUIRE_QT_VARIABLE, value)
+  assert qt_binding.qt_required() is required
