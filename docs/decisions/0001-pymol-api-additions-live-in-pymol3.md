@@ -18,10 +18,10 @@ can replace it.
 ## Decision
 
 This repository's additions to PyMOL's API go into a new top-level package,
-`pymol3`, shipped in the wheel and through it in the app. It only adds: it
-changes or replaces nothing in `pymol`, `pmg_qt` or `pymol2`, and reads their
-public functions (`pymol.gui.get_qtwindow()`, the window's `menudict`)
-without editing them.
+`pymol3`, shipped in the wheel and through it in the app. It only adds and
+changes or replaces nothing in `pymol`, `pmg_qt` or `pymol2`; it calls
+`pymol.gui.get_qtwindow()` and reads the window's `menudict` attribute
+without editing either.
 
 The dock panel API is the module `pymol3.ui`: `add_dock_panel()` returns a
 `DockPanel` handle, `get_dock_panel()` finds one by id, and each panel gets an

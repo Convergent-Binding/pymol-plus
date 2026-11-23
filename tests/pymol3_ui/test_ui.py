@@ -429,6 +429,9 @@ def test_panel_tabbed_behind_counts_as_visible(main_window):
   tmp_first = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   tmp_second = ui.add_dock_panel(qt.QtWidgets.QLabel(), "Contacts")
   tmp_second.show()
+  assert ([["Sequences", "Contacts"], "Contacts"]
+          in [list(tmp_pair) for tmp_pair in _tab_titles_and_current(
+              main_window)])
   assert tmp_first.is_visible()
 
 
@@ -441,7 +444,11 @@ def test_floating_panel_docks_back_into_its_area(main_window):
   tmp_panel = ui.add_dock_panel(
       qt.QtWidgets.QLabel(), "Sequences", area="bottom", floating=True
   )
+  assert tmp_panel.dock_widget.isFloating()
   tmp_panel.dock_widget.setFloating(False)
+  qt.QtWidgets.QApplication.processEvents()
+  assert not tmp_panel.dock_widget.isFloating()
+  assert not tmp_panel.dock_widget.isWindow()
   assert (
       main_window.dockWidgetArea(tmp_panel.dock_widget)
       == _AREA.BottomDockWidgetArea
@@ -478,3 +485,14 @@ def test_widget_that_is_no_widget_leaves_no_dock(main_window):
   )
   assert main_window.findChildren(qt.QtWidgets.QDockWidget) == []
   assert ui.get_dock_panel("Sequences") is None
+
+
+def test_none_widget_raises_type_error(main_window):
+  """None as the widget raises TypeError instead of making an empty panel.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  with pytest.raises(TypeError):
+    ui.add_dock_panel(None, "Sequences")
+  assert main_window.findChildren(qt.QtWidgets.QDockWidget) == []

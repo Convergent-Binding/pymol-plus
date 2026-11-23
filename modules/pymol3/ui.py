@@ -170,6 +170,8 @@ def add_dock_panel(
     raise _qt_not_available()
   tmp_qt = _import_qt()
   _check_gui_thread("add_dock_panel")
+  if widget is None:
+    raise TypeError("add_dock_panel needs a Qt widget, not None")
   tmp_area = _dock_area(tmp_qt, area)
   tmp_panel_id = title if panel_id is None else panel_id
   tmp_panels = _registry(tmp_window)

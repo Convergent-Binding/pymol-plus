@@ -2,7 +2,7 @@
 """The Qt binding for the pymol3 GUI tests, or a skip without one.
 
 Where the binding is part of the test setup, as under Bazel, the variable
-``PYMOL3_TESTS_REQUIRE_QT`` is set and a binding that fails to load fails
+``PYMOL3_TESTS_REQUIRE_QT`` is ``1`` and a binding that fails to load fails
 the tests instead of skipping them unnoticed.
 """
 
@@ -32,7 +32,7 @@ def import_qt() -> types.ModuleType:
     The ``pymol.Qt`` module.
 
   Raises:
-    ImportError: No binding loads and ``PYMOL3_TESTS_REQUIRE_QT`` is set;
+    ImportError: No binding loads and ``PYMOL3_TESTS_REQUIRE_QT`` is ``1``;
       without it the calling test or module is skipped instead.
   """
   if qt_required():
