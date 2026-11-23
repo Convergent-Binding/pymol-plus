@@ -350,3 +350,32 @@ def test_works_when_pymol_gui_name_is_replaced(main_window, monkeypatch):
   monkeypatch.setattr(pymol, "gui", gui)
   tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
   assert gui.get_dock_panel("Sequences") is tmp_panel
+
+
+@pytest.mark.parametrize("method", ["show", "hide", "remove"])
+def test_panel_methods_from_worker_thread_raise_runtime_error(
+    main_window, method
+):
+  """show(), hide() and remove() from another thread raise, changing nothing.
+
+  Args:
+    main_window: The window PyMOL returns.
+    method: The panel method a worker thread calls.
+  """
+  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  tmp_raised = []
+
+  def tmp_call() -> None:
+    """Calls the panel method from the worker thread, keeping its error."""
+    try:
+      getattr(tmp_panel, method)()
+    except RuntimeError as exception:
+      tmp_raised.append(exception)
+
+  tmp_thread = threading.Thread(target=tmp_call)
+  tmp_thread.start()
+  tmp_thread.join()
+  [tmp_exception] = tmp_raised
+  assert "GUI thread" in str(tmp_exception)
+  assert tmp_panel.is_visible()
+  assert gui.get_dock_panel("Sequences") is tmp_panel

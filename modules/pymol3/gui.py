@@ -79,8 +79,10 @@ class DockPanel:
     """Shows the panel and raises it above panels it is tabbed with.
 
     Raises:
-      RuntimeError: The panel was removed.
+      RuntimeError: The panel was removed, or the call came from another
+        thread than the GUI thread.
     """
+    _check_gui_thread("show")
     self._check_not_removed()
     self._dock_widget.show()
     self._dock_widget.raise_()
@@ -89,8 +91,10 @@ class DockPanel:
     """Hides the panel; ``show`` brings it back.
 
     Raises:
-      RuntimeError: The panel was removed.
+      RuntimeError: The panel was removed, or the call came from another
+        thread than the GUI thread.
     """
+    _check_gui_thread("hide")
     self._check_not_removed()
     self._dock_widget.hide()
 
@@ -109,7 +113,11 @@ class DockPanel:
 
     The dock widget and the plugin's widget in it are deleted. A second
     call does nothing.
+
+    Raises:
+      RuntimeError: The call came from another thread than the GUI thread.
     """
+    _check_gui_thread("remove")
     if self._removed:
       return
     self._removed = True
@@ -160,11 +168,7 @@ def add_dock_panel(
   if tmp_window is None:
     raise _qt_not_available()
   tmp_qt = _import_qt()
-  tmp_gui_thread = tmp_qt.QtWidgets.QApplication.instance().thread()
-  if tmp_qt.QtCore.QThread.currentThread() != tmp_gui_thread:
-    raise RuntimeError(
-        "add_dock_panel must be called from PyMOL's GUI thread"
-    )
+  _check_gui_thread("add_dock_panel")
   tmp_area = _dock_area(tmp_qt, area)
   tmp_panel_id = title if panel_id is None else panel_id
   tmp_panels = _registry(tmp_window)
@@ -204,6 +208,21 @@ def get_dock_panel(panel_id: str) -> DockPanel | None:
   if tmp_window is None:
     return None
   return _registry(tmp_window).get(panel_id)
+
+
+def _check_gui_thread(caller: str) -> None:
+  """Refuses calls that would touch Qt widgets from another thread.
+
+  Args:
+    caller: The function or method name the error message names.
+
+  Raises:
+    RuntimeError: The call came from another thread than the GUI thread.
+  """
+  tmp_qt = _import_qt()
+  tmp_gui_thread = tmp_qt.QtWidgets.QApplication.instance().thread()
+  if tmp_qt.QtCore.QThread.currentThread() != tmp_gui_thread:
+    raise RuntimeError(f"{caller} must be called from PyMOL's GUI thread")
 
 
 def _qt_window() -> QtWidgets.QMainWindow | None:
