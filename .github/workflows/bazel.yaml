@@ -75,8 +75,13 @@ jobs:
           chmod +x /usr/local/bin/bazel
           bazel --version
 
-      - name: Install OpenGL development headers
-        run: dnf install -y mesa-libGL-devel
+      # OpenGL headers for the build; the rest are the system libraries
+      # PySide6's QtGui and QtWidgets load, for the pymol3 GUI tests under
+      # //tests (as distribution/linux/dependencies.bzl lists for the app).
+      - name: Install OpenGL headers and Qt's system libraries
+        run: >-
+          dnf install -y mesa-libGL-devel mesa-libEGL libxkbcommon fontconfig
+          freetype glib2 dbus-libs
 
       - uses: bazel-contrib/setup-bazel@0.19.0
         with:

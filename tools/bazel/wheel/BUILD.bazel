@@ -33,6 +33,7 @@ _PACKAGES = [
     "//modules/pmg_tk",
     "//modules/pymol",
     "//modules/pymol2",
+    "//modules/pymol3",
 ]
 
 # Paths stripped from every member: the package roots and the staging package.

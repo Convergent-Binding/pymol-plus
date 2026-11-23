@@ -1,4 +1,23 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
+load("//tools/bazel:wheel_merge.bzl", "merge_wheel_files")
+
+# PySide6 for the pymol3 GUI tests, in one site-packages with shiboken6: on
+# Windows PySide6 finds shiboken6 only as a real sibling directory.
+merge_wheel_files(
+    name = "qt_site_packages",
+    testonly = True,
+    wheel_files = [
+        "@pymol_pip//pyside6_essentials:extracted_whl_files",
+        "@pymol_pip//shiboken6:extracted_whl_files",
+    ],
+)
+
+py_library(
+    name = "qt_site_packages_lib",
+    testonly = True,
+    data = [":qt_site_packages"],
+    imports = ["qt_site_packages/site-packages"],
+)
 
 # The pytest tests, run against modules/ with the built extensions and data
 # staged beside the packages, as //tools/bazel/tests:import_smoke_test does.
@@ -22,12 +41,22 @@ py_test(
         "//modules/pymol:cmd_extension_for_run",
         "//modules/pymol:runtime_data_for_run",
     ],
+    # The pymol3 GUI tests draw nothing on a real display, and fail rather
+    # than skip when the PySide6 they get here does not load.
+    env = {
+        "PYMOL3_TESTS_REQUIRE_QT": "1",
+        "QT_QPA_PLATFORM": "offscreen",
+    },
     main = "pytest_main.py",
     deps = [
+        ":qt_site_packages_lib",
         ":test_files",
         "//modules/chempy",
+        # pymol.plugins, which pymol3.ui raises errors from, imports pmg_tk.
+        "//modules/pmg_tk",
         "//modules/pymol",
         "//modules/pymol2",
+        "//modules/pymol3",
         "@pymol_pip//numpy",
         "@pymol_pip//pytest",
     ],

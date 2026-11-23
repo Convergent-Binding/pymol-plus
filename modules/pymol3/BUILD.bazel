@@ -1,0 +1,10 @@
+# The pure-Python `pymol3` package: this repository's additions to PyMOL's API.
+
+load("@rules_python//python:defs.bzl", "py_library")
+
+py_library(
+    name = "pymol3",
+    srcs = glob(["**/*.py"]),
+    imports = [".."],
+    visibility = ["//visibility:public"],
+)

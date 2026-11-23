@@ -6,3 +6,5 @@ numpy==2.2.6; python_version < "3.14"
 numpy==2.3.3; python_version >= "3.14"
 # pytest runs the tests under tests/ (//tests).
 pytest==8.3.5
+# The pymol3 GUI tests need a Qt binding; pinned as the app's PySide6.
+PySide6-Essentials==6.9.3
