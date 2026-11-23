@@ -22,8 +22,6 @@ from __future__ import annotations
 import importlib
 from typing import TYPE_CHECKING
 
-import pymol.gui
-
 if TYPE_CHECKING:
   from pymol.Qt import QtCore
   from pymol.Qt import QtWidgets
@@ -156,11 +154,17 @@ def add_dock_panel(
   Raises:
     pymol.plugins.QtNotAvailableError: PyMOL runs without its Qt window.
     ValueError: The area is none of the four, or the id is in use.
+    RuntimeError: The call came from another thread than the GUI thread.
   """
-  tmp_window = pymol.gui.get_qtwindow()
+  tmp_window = _qt_window()
   if tmp_window is None:
     raise _qt_not_available()
   tmp_qt = _import_qt()
+  tmp_gui_thread = tmp_qt.QtWidgets.QApplication.instance().thread()
+  if tmp_qt.QtCore.QThread.currentThread() != tmp_gui_thread:
+    raise RuntimeError(
+        "add_dock_panel must be called from PyMOL's GUI thread"
+    )
   tmp_area = _dock_area(tmp_qt, area)
   tmp_panel_id = title if panel_id is None else panel_id
   tmp_panels = _registry(tmp_window)
@@ -196,10 +200,24 @@ def get_dock_panel(panel_id: str) -> DockPanel | None:
   Returns:
     The panel, or None when no panel has the id or PyMOL has no Qt window.
   """
-  tmp_window = pymol.gui.get_qtwindow()
+  tmp_window = _qt_window()
   if tmp_window is None:
     return None
   return _registry(tmp_window).get(panel_id)
+
+
+def _qt_window() -> QtWidgets.QMainWindow | None:
+  """Asks PyMOL for its Qt main window.
+
+  ``pymol.gui`` is taken from ``sys.modules``, never as an attribute of
+  ``pymol``: scripts and Python typed at ``PyMOL>`` run in the ``pymol``
+  module's namespace, where ``from pymol3 import gui`` replaces that
+  attribute with this module.
+
+  Returns:
+    The window, or None when PyMOL runs without its Qt GUI.
+  """
+  return importlib.import_module("pymol.gui").get_qtwindow()
 
 
 def _registry(window: QtWidgets.QMainWindow) -> dict[str, DockPanel]:

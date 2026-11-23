@@ -1,7 +1,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Tests of pymol3.gui's dock panels in a Qt main window."""
 
+import threading
+
 import pytest
+
+import pymol
 
 from pymol3 import gui
 
@@ -304,3 +308,42 @@ def test_floating_panel_is_not_tabbed(main_window):
   )
   assert tmp_second.dock_widget.isFloating()
   assert main_window.tabifiedDockWidgets(tmp_first.dock_widget) == []
+
+
+def test_call_from_worker_thread_raises_runtime_error(main_window):
+  """A call from another thread than the GUI thread raises, adding nothing.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_label = qt.QtWidgets.QLabel()
+  tmp_raised = []
+
+  def tmp_call() -> None:
+    """Adds a panel from the worker thread and keeps what it raises."""
+    try:
+      gui.add_dock_panel(tmp_label, "T")
+    except RuntimeError as exception:
+      tmp_raised.append(exception)
+
+  tmp_thread = threading.Thread(target=tmp_call)
+  tmp_thread.start()
+  tmp_thread.join()
+  [tmp_exception] = tmp_raised
+  assert "GUI thread" in str(tmp_exception)
+  assert gui.get_dock_panel("T") is None
+
+
+def test_works_when_pymol_gui_name_is_replaced(main_window, monkeypatch):
+  """A script's ``from pymol3 import gui`` in PyMOL's namespace breaks nothing.
+
+  PyMOL runs scripts and typed Python in the ``pymol`` module's namespace,
+  where that import replaces the attribute ``pymol.gui``.
+
+  Args:
+    main_window: The window PyMOL returns.
+    monkeypatch: Replaces ``pymol.gui`` with ``pymol3.gui``.
+  """
+  monkeypatch.setattr(pymol, "gui", gui)
+  tmp_panel = gui.add_dock_panel(qt.QtWidgets.QLabel(), "Sequences")
+  assert gui.get_dock_panel("Sequences") is tmp_panel
