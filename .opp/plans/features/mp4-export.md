@@ -53,7 +53,7 @@
 - `distribution/edited/pymol/startup_wrapper.py` already prepares the environment (for example `SSL_CERT_FILE`) before PyMOL starts, on every platform (on Linux through `pymol_app_start`).
 - `_encode` runs a bare `ffmpeg` from the `PATH`; `encoder` accepts only `ffmpeg`, `convert` and `mpeg_encode`, no path.
 - The edited copies reach the app through the bundle's `overlays`; `//distribution/edited:edited_base_test` today checks only `edited/pmg_qt/*.py` against `//modules/pmg_qt`, and `overlays` and the test glob only `**/*.py`. So the test gains `//modules/pymol` as data and checks `pymol/movie.py`, `pmg_qt/file_dialogs.py` and `pmg_qt/forms/movieexport.ui`, each with its line in `upstream.sha256`, and `overlays` and the test glob include `.ui` files; `startup_wrapper.py` needs no line.
-- No ready-made LGPL ffmpeg fits: BtbN's LGPL builds (Windows, glibc 2.28 Linux) link their own OpenH264 build and other extras, macOS has no LGPL build, and stock FFmpeg cannot load `libopenh264` later. FFmpeg is built from source for all platforms, Linux with a small loader stub (as Fedora's `noopenh264`) so it starts without OpenH264; `linux_libraries_test` catches a build that needs it at start.
+- No ready-made LGPL ffmpeg fits: BtbN's LGPL builds (Windows, glibc 2.28 Linux) link their own OpenH264 build and other extras, macOS has no LGPL build, and stock FFmpeg cannot load `libopenh264` later. FFmpeg is built from source for all platforms, Windows and Linux with a small loader stub (as Fedora's `noopenh264`) so it starts without OpenH264; `linux_libraries_test` catches a build that needs it at start.
 
 ## Global Constraints
 
@@ -108,7 +108,7 @@ Each step is one branch from `production` and one pull request into `production`
 
 ## Review Focus
 
-- **ffmpeg on Linux needing OpenH264 at start.** An ffmpeg linked against `libopenh264` fails to start without it, which would break WebM and GIF too. Covered by a bundle test that runs the Linux ffmpeg in a clean container without OpenH264 and encodes WebM.
+- **ffmpeg needing OpenH264 at start.** An ffmpeg linked against OpenH264 fails to start without it, which would break WebM and GIF too. Covered by bundle tests that run the Linux ffmpeg in a clean container and the Windows ffmpeg without `openh264.dll`, each encoding WebM.
 - **The user's own ffmpeg.** A user ffmpeg without any H.264 encoder must neither end in MPEG-4 Part 2 nor trigger the OpenH264 question while the bundled ffmpeg has an H.264 encoder. Covered by tests of the encoder choice against `ffmpeg -encoders` listings with and without `libx264`, `h264_mf`, `h264_videotoolbox` and `libopenh264`, for the first and the bundled ffmpeg.
 - **Asking from the wrong thread.** The OpenH264 question must never come from `produce`. Covered by a headless test that exports MP4 without an encoder and gets the message.
 - **The macOS minimum and glibc 2.28.** A prebuilt ffmpeg may need a newer macOS or glibc. Covered by the existing bundle checks, which must include the ffmpeg binary.

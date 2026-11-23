@@ -19,9 +19,9 @@ cannot give. Each addition:
 
 - adds only: no existing C++ or Python function changes its behaviour,
   signature or output;
-- sits in a block marked `BEGIN PYMOL+ ADDITION` / `END PYMOL+ ADDITION`,
-  in `layer4/Cmd.cpp` (the `_cmd` entry) and the layer file that holds the
-  data;
+- sits in blocks marked `BEGIN PYMOL+ ADDITION` / `END PYMOL+ ADDITION`,
+  in `layer4/Cmd.cpp` (the `_cmd` entry) and the layer sources and
+  headers that hold the data or raise the event;
 - is reached from Python only through `pymol3` (for example
   `pymol3.query`), never through `pymol.cmd`, so `modules/pymol/` stays
   untouched;

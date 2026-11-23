@@ -1,5 +1,7 @@
 # 0001. PyMOL API additions live in pymol3; dock panels in pymol3.ui
 
+Amended by [0002](0002-additive-cpp-entry-points.md): upstream C++ may gain marked, additive entry points.
+
 ## Context
 
 Plugin developers needed a supported way to dock their own panel into PyMOL's
