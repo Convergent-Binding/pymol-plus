@@ -4,5 +4,8 @@
     "cpp": {
       "legacy": ["contrib/**", "include/**", "layer*/**", "ov/**"]
     }
+  },
+  "guards": {
+    "attribution": "all"
   }
 }
