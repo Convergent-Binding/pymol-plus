@@ -10,7 +10,7 @@
 
 - AGENTS.md: "`distribution/edited/` holds upstream PyMOL files with marked edits (`BEGIN EDITED CODE SEGMENT`)". The new code goes inside such segments. The `modules/` original does not change, so `distribution/edited/upstream.sha256` stays as it is.
 - AGENTS.md: "The app's version lives only in `distribution/pyproject.toml`".
-- Python follows `opp-workflow:python-style`; `python3 .opp/style/check.py` judges changed lines. Code copied from upstream gets adapted where the checker asks, for example docstrings with Args/Returns.
+- `.opp/config.json` excludes `distribution/edited/**` from the style check, so the code ported into `edited/` stays identical to upstream's, which keeps later upstream syncs simple.
 
 ## Review Focus
 
@@ -40,7 +40,7 @@ On Linux and macOS, quitting the built app with `cmd.quit`, by closing the windo
 ## Steps
 
 1. Commit this plan.
-2. `distribution/edited/pmg_qt/pymol_qt_gui.py`: in `execapp()`, after the high-DPI attribute (line 1248), call `quit_without_exit_handlers()`. Replace `app.exec()` (line 1377) with the bounded lock wait and `end_process(exit_code)`. Add the two functions `quit_without_exit_handlers()` and `end_process(code)` before `offer_to_remove_older_apps`. All of it goes in `BEGIN/END EDITED CODE SEGMENT` blocks and follows upstream's diff in PR #52, adapted to the style checker. Commit.
+2. `distribution/edited/pmg_qt/pymol_qt_gui.py`: in `execapp()`, after the high-DPI attribute (line 1248), call `quit_without_exit_handlers()`. Replace `app.exec()` (line 1377) with the bounded lock wait and `end_process(exit_code)`. Add the two functions `quit_without_exit_handlers()` and `end_process(code)` before `offer_to_remove_older_apps`. All of it goes in `BEGIN/END EDITED CODE SEGMENT` blocks and follows upstream's diff in PR #52 unchanged. Commit.
 3. `distribution/tests/run_smoke_test.sh`: after the success check, fail at once without a retry when the log holds `SMOKE TEST OK` and the exit code is 139 or 134. Commit.
 4. `distribution/pyproject.toml`: version `3.2.0.3+2`. Commit.
 
