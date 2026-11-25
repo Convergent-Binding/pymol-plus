@@ -1357,6 +1357,14 @@ def execapp():
     pymol.cmd._call_with_opengl_context = lambda func: pymol.cmd._call_in_gui_thread(
         lambda: _call_with_opengl_context_gui_thread(func))
 
+    # BEGIN EDITED CODE SEGMENT
+    # :author Martin Urban
+    # PyMOL+ GUI features run before the window is shown, in the new GUI
+    # only (pymol3.app decides: --new-gui, --classic-gui, Display -> New GUI)
+    import pymol3.app
+    pymol3.app.start(window)
+    # END EDITED CODE SEGMENT
+
     window.show()
     window.raise_()
 
@@ -1369,6 +1377,14 @@ def execapp():
     # load plugins
     if options.plugins:
         window.initializePlugins()
+
+    # BEGIN EDITED CODE SEGMENT
+    # :author Martin Urban
+    # PyMOL+ GUI features finish once the plugins are loaded (loading them
+    # clears the Plugin menu), and Display -> New GUI is added
+    import pymol3.app
+    pymol3.app.ready(window)
+    # END EDITED CODE SEGMENT
 
     # BEGIN EDITED CODE SEGMENT
     # :author Hannah Kullik

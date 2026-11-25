@@ -5,14 +5,32 @@
 load("@rules_python//python:defs.bzl", "py_test")
 
 exports_files(
-    glob(["**/*.py"]),
+    glob(
+        ["**/*.py"],
+        exclude = ["*_test.py"],
+    ),
     visibility = ["//distribution:__subpackages__"],
 )
 
 filegroup(
     name = "overlays",
-    srcs = glob(["**/*.py"]),
+    srcs = glob(
+        ["**/*.py"],
+        exclude = ["*_test.py"],
+    ),
     visibility = ["//distribution:__subpackages__"],
+)
+
+# startup_wrapper.py turns the app's --new-gui and --classic-gui into
+# PYMOL_PLUS_GUI and keeps them from PyMOL.
+py_test(
+    name = "startup_wrapper_test",
+    size = "small",
+    srcs = ["startup_wrapper_test.py"],
+    data = ["pymol/startup_wrapper.py"],
+    legacy_create_init = False,
+    python_version = "3.13",
+    deps = ["//modules/pymol3"],
 )
 
 # Fails when a modules/ original changes after its copy here was made.
