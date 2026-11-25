@@ -75,11 +75,47 @@ def _use_app_user_model_id() -> None:
   )
 
 
+GUI_OPTIONS = {"--new-gui": "new", "--classic-gui": "classic"}
+"""The app's command-line options for the GUI and the style each selects."""
+
+GUI_VARIABLE = "PYMOL_PLUS_GUI"
+"""The environment variable through which pymol3.app reads the style."""
+
+
+def _take_gui_option(argv: list[str]) -> list[str]:
+  """Turns --new-gui and --classic-gui into PYMOL_PLUS_GUI.
+
+  PyMOL would take the options for files to open, so they are removed.
+  The last one wins, also over a PYMOL_PLUS_GUI the user set. Arguments
+  after "--" belong to a Python script and stay untouched.
+
+  Args:
+    argv: The command line, the program first.
+
+  Returns:
+    The command line without the two options.
+  """
+  tmp_arguments = list(argv[:1])
+  tmp_rest = list(argv[1:])
+  while tmp_rest:
+    tmp_argument = tmp_rest.pop(0)
+    if tmp_argument == "--":
+      tmp_arguments.append(tmp_argument)
+      tmp_arguments.extend(tmp_rest)
+      break
+    if tmp_argument in GUI_OPTIONS:
+      os.environ[GUI_VARIABLE] = GUI_OPTIONS[tmp_argument]
+    else:
+      tmp_arguments.append(tmp_argument)
+  return tmp_arguments
+
+
 if __name__ == '__main__':
   _use_app_user_model_id()
   _use_system_ca_certificates()
   _use_pyside6()
   _use_whole_scale_on_wayland()
+  sys.argv[:] = _take_gui_option(sys.argv)
 
   import pymol  # only after the environment is set up (imports ssl)
   pymol.launch(sys.argv)
