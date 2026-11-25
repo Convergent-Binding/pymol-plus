@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """Tests of pymol3.app: the GUI style, the features and the menu entry."""
 
+import importlib
+import os
+import subprocess
+import sys
+
 import pytest
 
 from pymol3 import app
@@ -102,6 +107,39 @@ def test_style_ignores_invalid_values(monkeypatch, capsys):
   tmp_output = capsys.readouterr().out
   assert "'fancy'" in tmp_output
   assert "'shiny'" in tmp_output
+
+
+def test_style_invalid_environment_falls_back_to_stored(monkeypatch):
+  """An unknown environment value leaves the stored choice in charge.
+
+  Args:
+    monkeypatch: Sets the environment variable.
+  """
+  app.store_style(app.NEW)
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, "fancy")
+  assert app.style() == app.NEW
+
+
+def test_import_needs_no_qt_binding():
+  """Importing pymol3.app loads no Qt binding.
+
+  Runs in a fresh interpreter, since other tests of the session load one.
+  """
+  tmp_environment = dict(os.environ)
+  tmp_environment["PYTHONPATH"] = os.pathsep.join(sys.path)
+  tmp_result = subprocess.run(
+      [
+          sys.executable,
+          "-c",
+          "import sys, pymol3.app; "
+          "sys.exit('pymol.Qt' in sys.modules)",
+      ],
+      env=tmp_environment,
+      capture_output=True,
+      text=True,
+      check=False,
+  )
+  assert tmp_result.returncode == 0, tmp_result.stderr
 
 
 def test_style_fixed_for_the_run():
@@ -207,7 +245,7 @@ def test_failing_feature_does_not_stop_others(
   app.start(main_window)
   app.ready(main_window)
   assert tmp_calls == [("objects", "start"), ("objects", "ready")]
-  assert "broken feature" in capsys.readouterr().err
+  assert "broken feature" in capsys.readouterr().out
 
 
 def test_menu_hidden_without_features(monkeypatch, main_window):
@@ -279,6 +317,82 @@ def test_menu_entry_stores_choice_for_next_start(main_window):
   tmp_boxes[0].close()
   _new_gui_action(main_window).trigger()
   assert app.stored_style() == app.CLASSIC
+
+
+def test_menu_message_names_override(monkeypatch, main_window):
+  """With the style set for this start, the message says it wins.
+
+  Args:
+    monkeypatch: Sets the environment variable.
+    main_window: The main window.
+  """
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, app.NEW)
+  app.register(app.Feature(name="objects"))
+  app.start(main_window)
+  app.ready(main_window)
+  _new_gui_action(main_window).trigger()
+  assert app.stored_style() == app.CLASSIC
+  tmp_boxes = main_window.findChildren(qt.QtWidgets.QMessageBox)
+  assert len(tmp_boxes) == 1
+  assert app.ENVIRONMENT_VARIABLE in tmp_boxes[0].text()
+  assert "--new-gui" in tmp_boxes[0].text()
+  tmp_boxes[0].close()
+
+
+def _sample_module_name() -> str:
+  """Names the sample feature module beside this test module.
+
+  Returns:
+    The module's full name.
+  """
+  return __name__.rpartition(".")[0] + ".sample_feature"
+
+
+@pytest.mark.parametrize(
+    ("style", "calls"), [(app.NEW, ["start", "ready"]), (app.CLASSIC, [])]
+)
+def test_start_imports_feature_modules(
+    monkeypatch, main_window, style, calls
+):
+  """start imports the feature modules in both styles; they register.
+
+  The classic GUI then offers the switch, and only the new GUI runs the
+  feature.
+
+  Args:
+    monkeypatch: Sets the module list and the environment variable.
+    main_window: The main window.
+    style: The style of the run.
+    calls: The phases the feature must run in that style.
+  """
+  tmp_name = _sample_module_name()
+  monkeypatch.delitem(sys.modules, tmp_name, raising=False)
+  monkeypatch.setattr(app, "FEATURE_MODULES", (tmp_name,))
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, style)
+  app.start(main_window)
+  app.ready(main_window)
+  assert importlib.import_module(tmp_name).CALLS == calls
+  assert _new_gui_action(main_window) is not None
+
+
+def test_broken_feature_module_is_skipped(monkeypatch, main_window, capsys):
+  """A feature module that fails to import leaves the others working.
+
+  Args:
+    monkeypatch: Sets the module list and the environment variable.
+    main_window: The main window.
+    capsys: Captures PyMOL's output.
+  """
+  tmp_name = _sample_module_name()
+  monkeypatch.delitem(sys.modules, tmp_name, raising=False)
+  monkeypatch.setattr(
+      app, "FEATURE_MODULES", ("pymol3.no_such_feature", tmp_name)
+  )
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, app.NEW)
+  app.start(main_window)
+  app.ready(main_window)
+  assert importlib.import_module(tmp_name).CALLS == ["start", "ready"]
+  assert "pymol3.no_such_feature" in capsys.readouterr().out
 
 
 def test_menu_needs_no_display_menu(bare_main_window):

@@ -79,15 +79,27 @@ GUI_OPTIONS = {"--new-gui": "new", "--classic-gui": "classic"}
 """The app's command-line options for the GUI and the style each selects."""
 
 GUI_VARIABLE = "PYMOL_PLUS_GUI"
-"""The environment variable through which pymol3.app reads the style."""
+"""The environment variable through which pymol3.app reads the style.
+
+The same name as pymol3.app.ENVIRONMENT_VARIABLE; this module runs before
+pymol3 may be imported.
+"""
+
+PYMOL_LONG_OPTIONS = frozenset(
+  ("--version", "--help", "--retina", "--nospnav", "--gldebug", "--testing",
+   "--diagnostics")
+)
+"""The long options PyMOL reads itself (pymol.invocation.parse_args)."""
 
 
 def _take_gui_option(argv: list[str]) -> list[str]:
   """Turns --new-gui and --classic-gui into PYMOL_PLUS_GUI.
 
-  PyMOL would take the options for files to open, so they are removed.
-  The last one wins, also over a PYMOL_PLUS_GUI the user set. Arguments
-  after "--" belong to a Python script and stay untouched.
+  PyMOL ends its own arguments at any other long option and hands the rest
+  to a Python script, so an option left in place would cut off every
+  argument after it. The last option wins, also over a PYMOL_PLUS_GUI the
+  user set. Like PyMOL, the search ends at "--" or another long option
+  PyMOL does not know: what follows belongs to a script.
 
   Args:
     argv: The command line, the program first.
@@ -99,14 +111,14 @@ def _take_gui_option(argv: list[str]) -> list[str]:
   tmp_rest = list(argv[1:])
   while tmp_rest:
     tmp_argument = tmp_rest.pop(0)
-    if tmp_argument == "--":
-      tmp_arguments.append(tmp_argument)
-      tmp_arguments.extend(tmp_rest)
-      break
     if tmp_argument in GUI_OPTIONS:
       os.environ[GUI_VARIABLE] = GUI_OPTIONS[tmp_argument]
-    else:
-      tmp_arguments.append(tmp_argument)
+      continue
+    tmp_arguments.append(tmp_argument)
+    if (tmp_argument.startswith("--")
+        and tmp_argument not in PYMOL_LONG_OPTIONS):
+      tmp_arguments.extend(tmp_rest)
+      break
   return tmp_arguments
 
 

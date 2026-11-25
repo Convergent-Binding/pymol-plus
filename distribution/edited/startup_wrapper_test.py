@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 """startup_wrapper turns --new-gui and --classic-gui into PYMOL_PLUS_GUI.
 
-PyMOL itself must never receive the two options: it would take them for
-files to open.
+PyMOL itself must never receive the two options: it ends its own
+arguments at an unknown long option and hands the rest to a script.
 """
 
 import importlib.util
@@ -87,6 +87,33 @@ class TakeGuiOptionTest(unittest.TestCase):
     )
     self.assertEqual(tmp_arguments, ["pymol", "script.py", "--", "--new-gui"])
     self.assertNotIn(_VARIABLE, os.environ)
+
+  def test_after_unknown_long_option(self) -> None:
+    """Options after a long option PyMOL does not know belong to a script."""
+    tmp_arguments = _WRAPPER._take_gui_option(
+        ["pymol", "script.py", "--verbose", "--new-gui"]
+    )
+    self.assertEqual(
+        tmp_arguments, ["pymol", "script.py", "--verbose", "--new-gui"]
+    )
+    self.assertNotIn(_VARIABLE, os.environ)
+
+  def test_after_pymol_long_option(self) -> None:
+    """PyMOL's own long options do not end the search."""
+    tmp_arguments = _WRAPPER._take_gui_option(
+        ["pymol", "--gldebug", "--new-gui", "1abc.pdb"]
+    )
+    self.assertEqual(tmp_arguments, ["pymol", "--gldebug", "1abc.pdb"])
+    self.assertEqual(os.environ[_VARIABLE], "new")
+
+  def test_names_match_pymol3_app(self) -> None:
+    """The variable and the styles are the ones pymol3.app reads."""
+    from pymol3 import app
+
+    self.assertEqual(_WRAPPER.GUI_VARIABLE, app.ENVIRONMENT_VARIABLE)
+    self.assertEqual(
+        sorted(_WRAPPER.GUI_OPTIONS.values()), sorted(app.STYLES)
+    )
 
 
 if __name__ == "__main__":

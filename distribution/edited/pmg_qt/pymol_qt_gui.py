@@ -1382,6 +1382,7 @@ def execapp():
     # :author Martin Urban
     # PyMOL+ GUI features finish once the plugins are loaded (loading them
     # clears the Plugin menu), and Display -> New GUI is added
+    import pymol3.app
     pymol3.app.ready(window)
     # END EDITED CODE SEGMENT
 

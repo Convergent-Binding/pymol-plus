@@ -71,6 +71,7 @@ The app starts in the classic GUI by default, `--new-gui`, `PYMOL_PLUS_GUI` or t
 - `pymol3.app.ENVIRONMENT_VARIABLE`: `"PYMOL_PLUS_GUI"`.
 - `pymol3.app.style() -> str`: the style in effect for this run: the environment variable if valid, else the stored choice if valid, else the default. Fixed at the first call of the run.
 - `pymol3.app.stored_style() -> str | None` and `pymol3.app.store_style(style: str) -> None`: the stored choice.
+- `pymol3.app.FEATURE_MODULES`: the feature modules, empty for now; `start` imports each once, in both styles, and a module registers its feature when imported (it creates no widget then). A module that fails to import is reported and left out.
 - `pymol3.app.register(feature: Feature) -> None`: a feature registers once; a `Feature` has a `name` and optional `start(window)` and `ready(window)`.
 - `pymol3.app.start(window)` and `pymol3.app.ready(window)`: called by the app's hooks; they run the registered features in the new style only, and `ready` adds the menu entry when any feature is registered.
 - Command line of the app: `--new-gui`, `--classic-gui` (the last one wins); removed from `sys.argv` before `pymol.launch`.
@@ -78,7 +79,8 @@ The app starts in the classic GUI by default, `--new-gui`, `PYMOL_PLUS_GUI` or t
 ## Edge cases
 
 - `PYMOL_PLUS_GUI` or the stored value is neither `new` nor `classic`: ignored, with one line on PyMOL's output naming the value.
-- A feature raises in `start` or `ready`: the traceback is printed, the feature is skipped for the rest of the run, the others still run.
+- A feature raises in `start` or `ready`: the traceback is printed to PyMOL's output, the feature is skipped for the rest of the run, the others still run.
+- A feature module fails to import: reported on PyMOL's output, the other modules still import.
 - A feature registers twice under the same name: `ValueError`.
 - The window has no `menudict` or no Display menu (a host without PyMOL's menus): no menu entry, no error, as `pymol3.ui` does.
 - The checkbox is changed while a command-line override is in effect: the stored choice changes, the message says it applies from the next start without the option.
@@ -89,7 +91,7 @@ The app starts in the classic GUI by default, `--new-gui`, `PYMOL_PLUS_GUI` or t
 - `--new-gui` runs the registered features' `start` before the window is shown and `ready` after the plugins are loaded; `--classic-gui` runs neither, whatever is stored.
 - With at least one registered feature, Display → New GUI is checked in the new style, unchecked in the classic style, and toggling it stores the choice and tells the user it applies after a restart.
 - With no registered feature, the Display menu has no New GUI entry.
-- PyMOL never receives `--new-gui` or `--classic-gui` among its arguments.
+- PyMOL never receives `--new-gui` or `--classic-gui` among its own arguments; after `--` or a long option PyMOL does not know, which end PyMOL's arguments, they belong to the script and stay.
 - The five feature plans name this switch instead of their own, and no longer plan a remembered Internal GUI choice or a "Show at start" setting.
 - `//distribution/edited:edited_base_test` passes without a change to `upstream.sha256`.
 

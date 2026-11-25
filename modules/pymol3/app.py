@@ -4,11 +4,17 @@
 The PyMOL+ GUI features register here; the app's Qt GUI calls ``start``
 before its main window is shown and ``ready`` once its plugins are loaded.
 Both run the registered features only while the GUI style is ``new``; in
-the classic style PyMOL starts exactly as it would without them::
+the classic style PyMOL starts exactly as it would without them. A
+feature lives in a module listed in ``FEATURE_MODULES`` and registers when
+``start`` imports it, in both styles, so the classic GUI too can offer the
+switch to the new one::
 
     from pymol3 import app
 
     app.register(app.Feature(name="objects_panel", start=create_panel))
+
+Importing a feature module must create no widget; that is ``start``'s and
+``ready``'s work.
 
 The style is fixed for a run at its first use. ``PYMOL_PLUS_GUI``, which
 the app's ``--new-gui`` and ``--classic-gui`` set, wins over the choice
@@ -22,6 +28,7 @@ from __future__ import annotations
 import dataclasses
 import importlib
 import os
+import sys
 import traceback
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -43,7 +50,14 @@ DEFAULT_STYLE = CLASSIC
 """The style when neither the environment nor the store names one."""
 
 ENVIRONMENT_VARIABLE = "PYMOL_PLUS_GUI"
-"""The environment variable that names the style for one run."""
+"""The environment variable that names the style for one run.
+
+The app's ``startup_wrapper.py`` sets it from ``--new-gui`` and
+``--classic-gui`` under the same name, before this package can be imported.
+"""
+
+FEATURE_MODULES: tuple[str, ...] = ()
+"""The modules of the PyMOL+ GUI features, imported by ``start``."""
 
 SETTINGS_ORGANIZATION = "PyMOL-Open-Source"
 """The organization of the app's ``QSettings`` store."""
@@ -98,6 +112,9 @@ class _State:
 
     self.message: QtWidgets.QMessageBox | None = None
     """The open restart message, kept from deletion while shown."""
+
+    self.imported = False
+    """Whether the feature modules were imported."""
 
 
 _state = _State()
@@ -206,13 +223,39 @@ def register(feature: Feature) -> None:
 
 
 def start(window: QtWidgets.QMainWindow) -> None:
-  """Runs every registered feature's start, in the new style only.
+  """Imports the feature modules, then runs each start in the new style.
+
+  The modules are imported in both styles, once, so their features are
+  registered and ``ready`` can offer the switch in the classic GUI too.
 
   Args:
     window: PyMOL's main window, not shown yet.
   """
+  _import_features()
   if style() == NEW:
     _run_all("start", window)
+
+
+def _import_features() -> None:
+  """Imports every module of ``FEATURE_MODULES`` once.
+
+  A module that fails to import is reported and skipped; the others are
+  still imported.
+  """
+  if _state.imported:
+    return
+  _state.imported = True
+  for tmp_module_name in FEATURE_MODULES:
+    try:
+      importlib.import_module(tmp_module_name)
+    # A broken feature module must leave PyMOL and the other features
+    # starting, so every exception is caught and reported here.
+    except Exception:
+      traceback.print_exc(file=sys.stdout)
+      print(
+          f" PyMOL+: the GUI feature module {tmp_module_name!r} failed to"
+          " import and is left out of this run."
+      )
 
 
 def ready(window: QtWidgets.QMainWindow) -> None:
@@ -250,7 +293,9 @@ def _run_all(phase: str, window: QtWidgets.QMainWindow) -> None:
     # starting, so every exception is caught and reported here.
     except Exception:
       _state.failed.add(tmp_feature.name)
-      traceback.print_exc()
+      # PyMOL's output shows standard output; the app has no console for
+      # standard error.
+      traceback.print_exc(file=sys.stdout)
       print(
           f" PyMOL+: the GUI feature {tmp_feature.name!r} failed in"
           f" {phase} and is switched off for this run."
@@ -288,8 +333,7 @@ def _choose(window: QtWidgets.QMainWindow, chosen: str) -> None:
     chosen: The style chosen.
   """
   store_style(chosen)
-  tmp_name = "new" if chosen == NEW else "classic"
-  tmp_text = f"PyMOL starts with the {tmp_name} GUI after a restart."
+  tmp_text = f"PyMOL starts with the {chosen} GUI after a restart."
   if _state.overridden:
     tmp_text += (
         f" This start was set by --new-gui, --classic-gui or"
