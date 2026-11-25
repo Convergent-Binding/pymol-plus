@@ -1,6 +1,6 @@
 # An Objects panel that replaces the internal GUI, ASHLC kept
 
-**Goal:** A Qt panel docked on the right takes over everything PyMOL's internal GUI does (the object list with its A S H L C buttons and their menus, the movie controls, the mouse mode and bindings, and wizard panels) in a modern look with smooth fonts and light and dark themes, so the internal GUI can be switched off by default.
+**Goal:** A Qt panel docked on the right takes over everything PyMOL's internal GUI does (the object list with its A S H L C buttons and their menus, the movie controls, the mouse mode and bindings, and wizard panels) in a modern look with smooth fonts and light and dark themes, so the new GUI can run without the internal GUI.
 
 **Architecture:** New modules in the `pymol3` package build the panel on `pymol3.ui.add_dock_panel(..., area="right")`. The panel reads PyMOL's state through `cmd` (names, groups, enabled objects, frames, states, mouse mode, the active wizard), builds its menus from the same `pymol.menu` functions the internal GUI calls, and runs the same commands. A few new, read-only C++ entry points (object tree with group membership and open state, current mouse bindings, measured frame rate) are added to `_cmd` and reached through `pymol3`, since `cmd` cannot provide them; no existing function changes. One marked hook in the app's copy of `pymol_qt_gui.py` creates the panel at start.
 
@@ -63,12 +63,12 @@
 - The movie controls live in the panel, not in the toolbar; `features/command-palette.md`'s toolbar drops them in step 3 of this feature.
 - Built as approach B.
 - Small, purely additive read-only C++ functions are allowed where `cmd` cannot provide what the panel needs (reviewer question, accepted 2026-11-23).
-- `internal_gui` alone decides: the panel shows exactly while the internal GUI is off, never both. The app starts with it off; the existing Display → Internal GUI checkbox stays the switch and is remembered; an explicit command-line option or a `.pymolrc` wins over the remembered choice (reviewer question, accepted 2026-11-23).
+- The one new-GUI switch decides whether the panel exists: in the classic GUI it is not created and nothing changes. In the new GUI, `internal_gui` decides within the run: the panel shows exactly while the internal GUI is off, never both. The new GUI starts with it off; the existing Display → Internal GUI checkbox toggles it for the run and is not remembered; `pymol -i` or a `.pymolrc` still set it (one switch for all PyMOL+ GUI features, decided 2026-11-25).
 
 **Calls made in the design (Claude's, open to correction).**
 
-- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets two shared marked segment areas that every feature registers through: at start-up in `execapp()`, `pymol3.app.start(window)` before `window.show()` and `pymol3.app.ready(window)` after `initializePlugins()` (which clears the Plugin menu); and in `update_feedback()`, `pymol3.app.tick(window, feedback)` with every tick and feedback batch. Whichever feature lands first adds both areas, `pymol3.app`, and `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet. A feature adds a marked segment of its own only where it must change an existing method or class-level code, and names it here. This feature: `start` (switch `internal_gui` off before the window shows, create the panel), `tick` (sync).
-- The remembered choice of Display → Internal GUI lives in the app's `QSettings('PyMOL-Open-Source', 'PyMOL-Open-Source')`; the panel follows `internal_gui` through the GUI's existing setting callbacks, so `reinitialize`, `.psw` files and scripts that change it are followed too.
+- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets two shared marked segment areas that every feature registers through: at start-up in `execapp()`, `pymol3.app.start(window)` before `window.show()` and `pymol3.app.ready(window)` after `initializePlugins()` (which clears the Plugin menu); and in `update_feedback()`, `pymol3.app.tick(window, feedback)` with every tick and feedback batch. `pymol3.app` and the `start` and `ready` areas exist (branch `new-gui-switch`): a feature registers with `pymol3.app.register(pymol3.app.Feature(...))`, and the hooks run it only while the GUI style is `new`, chosen by the one switch (Display → New GUI, remembered; `--new-gui` or `--classic-gui`, or `PYMOL_PLUS_GUI`, for one start). In the classic style the feature does not run at all, so no feature adds a switch of its own. Whichever feature lands first adds the `tick` area and `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet. A feature adds a marked segment of its own only where it must change an existing method or class-level code, and names it here. This feature: `start` (switch `internal_gui` off before the window shows, create the panel), `tick` (sync).
+- The panel follows `internal_gui` through the GUI's existing setting callbacks, so `reinitialize`, `.psw` files and scripts that change it are followed too.
 - The new C++ functions are reached from Python only through `pymol3` (for example `pymol3.query.object_tree()`, `mouse_bindings()`, `frame_rate()`); `modules/pymol/` stays untouched. Each C++ addition sits in its own clearly marked block so porting upstream changes stays simple.
 - The panel follows PyMOL's state by polling on the GUI's existing 500 ms tick and on the setting updates it already receives, as the scenes panel does; it does not call `get_setting_updates()` itself.
 - The mouse mode and selection mode stay in the panel, not the status bar.
@@ -113,7 +113,7 @@ layer1/ButMode.h
 
 ## Done
 
-All four steps below are merged into `production`, and the app starts with the Objects panel and without the internal GUI.
+All four steps below are merged into `production`, and the app in the new GUI starts with the Objects panel and without the internal GUI; in the classic GUI it starts as before.
 
 ## Non-goals
 
@@ -124,12 +124,12 @@ All four steps below are merged into `production`, and the app starts with the O
 
 ## Steps
 
-Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts. The internal GUI stays on until step 4, so nothing is lost on the way.
+Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts. The internal GUI stays on, in the new GUI too, until step 4, so nothing is lost on the way.
 
 1. **Read-only C++ getters** (`objects-panel-getters`): the object tree (every object's and selection's name, type, enabled and cloaked state, group membership, group open state, state count, in panel order), the current mouse bindings with their code names, and the measured frame rate, added to `_cmd` in marked blocks and wrapped in `pymol3.query`. Tested from Python against a real PyMOL; the wheel builds on every platform.
 2. **Object list and menus** (`objects-panel-list`): the panel, rows, eye and name clicks with their modifiers, paint visibility, middle-click, drag reorder with group and ungroup, groups through `cmd.group(..., action=open/close)`, filter, state badges, cloaked rows, name colours, A S H L C (and M) menus from `pymol.menu` for every object type with coloured labels, sync with PyMOL, the shared light and dark theme.
 3. **Movie and mouse** (`objects-panel-movie-mouse`): the movie row with its readout, the mouse and selection pills with their cycling, editing-mode and configuration behaviour, the binding table from `pymol3.query.mouse_bindings()`, and removing the movie buttons and Rock from the command palette's toolbar if it exists.
-4. **Wizards and the switch** (`objects-panel-wizards`): the wizard section from `get_panel()`, the registration through the shared GUI hooks (adding them and `visible=` if this lands first; the panel starts hidden while `internal_gui` is on), the panel following `internal_gui`, and the remembered Display → Internal GUI choice with command-line and `.pymolrc` precedence.
+4. **Wizards and the switch** (`objects-panel-wizards`): the wizard section from `get_panel()`, the registration through the shared GUI hooks (adding `visible=` if this lands first; the panel starts hidden while `internal_gui` is on), the panel following `internal_gui`, and `internal_gui` switched off at start in the new GUI unless `pymol -i` or a `.pymolrc` set it.
 
 ## Review Focus
 
@@ -147,7 +147,7 @@ Each step is one branch from `production` and one pull request into `production`
 - The movie row's buttons and toggles do what the internal GUI's do; the readout shows frame, rate and state.
 - The mouse and selection pills cycle as the internal GUI does; right-click opens the mouse configuration menu; the binding table matches the current mode.
 - A running wizard (Mutagenesis, Measurement, Sculpting) can be driven completely from the wizard section.
-- The app starts with the panel and without the internal GUI; Display → Internal GUI brings the internal GUI back (and hides the panel) and is remembered; `pymol -i` or a `.pymolrc` setting wins over the remembered choice.
+- In the new GUI the app starts with the panel and without the internal GUI; Display → Internal GUI brings the internal GUI back for the run (and hides the panel); `pymol -i` or a `.pymolrc` setting wins at start. In the classic GUI there is no panel and the internal GUI is as before.
 - The new C++ functions only add; every existing `cmd` function behaves as before.
 - No upstream Python file changes (`modules/` outside `modules/pymol3/`); upstream C++ changes only by the marked, additive blocks in `## Scope`, each marked `BEGIN PYMOL+ ADDITION` / `END PYMOL+ ADDITION`; `bazel test //...` and `bazel test //distribution/...` pass.
 

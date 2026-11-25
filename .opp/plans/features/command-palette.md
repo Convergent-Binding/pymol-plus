@@ -1,6 +1,6 @@
 # A command palette as PyMOL+'s central command input
 
-**Goal:** A VS Code-style command palette (Ctrl+Shift+P) becomes PyMOL+'s main way to give commands: newcomers find commands without knowing their names, experienced users work faster than in the old command line; command output moves to an optional bottom panel, the External GUI's quick buttons to a slim toolbar, and the External GUI becomes legacy, off by default behind a remembered setting.
+**Goal:** A VS Code-style command palette (Ctrl+Shift+P) becomes PyMOL+'s main way to give commands: newcomers find commands without knowing their names, experienced users work faster than in the old command line; command output moves to an optional bottom panel, the External GUI's quick buttons to a slim toolbar, and the External GUI becomes legacy: off in the new GUI, shown in the classic GUI, as the one new-GUI switch decides.
 
 **Architecture:** New modules in the `pymol3` package (introduced by `pymol3-dock-panels`) hold the palette, the bottom output panel, the toolbar, the layout toggles and the go-to mode; they build on `pymol3.ui` and `pymol.Qt`. The app's marked copy `distribution/edited/pmg_qt/pymol_qt_gui.py` gets only short `BEGIN EDITED CODE SEGMENT` hooks that start the new interface, pass feedback and progress on, and honour the External GUI setting at start.
 
@@ -27,7 +27,7 @@
   - the External GUI's quick buttons with icons and text: Reset, Zoom, Orient, Draw/Ray, Unpick, Deselect, Get View, MClear, Builder, Properties, Rebuild; every one also exists as a palette entry. The movie controls (`|<`, `<`, Stop, Play, `>`, `>|`) and Rock live in the Objects panel's movie row instead (`features/objects-panel.md`, decided 2026-11-23); until that panel exists, the toolbar carries them;
   - on the right, VS Code's three layout toggles: left side, bottom panel, right side. Hiding an area hides the panels visible in it now and remembers them; showing it again restores exactly those. A panel may refuse to show (the Objects panel while the internal GUI is on, `objects-panel.md`), and a panel the user closed stays closed. Bottom shows or hides the output panel.
 - **Status bar.** The progress bar and the red Abort button move from the External GUI into the window's status bar, always visible, so a long ray trace or calculation can always be stopped.
-- **External GUI as legacy.** A remembered setting, **Display → External GUI → Show at start**, decides whether the External GUI appears. It defaults to off for **every** installation, updated ones included: the app cannot tell an update from a fresh install without installer changes. At the first start of the version that turns it off, a one-time notice says "The External GUI is now off. Commands: Ctrl+Shift+P, output: Ctrl+J" with a button that switches it back on; the notice's having been shown is remembered in the same `QSettings` store. Everything it offered stays reachable: commands through the palette, output in the bottom panel, buttons in the toolbar, progress in the status bar.
+- **External GUI as legacy.** The one new-GUI switch decides whether the External GUI appears (Shared GUI hooks): the new GUI starts without it, the classic GUI with it, as today. At the first start in the new GUI, a one-time notice says "The External GUI is off in the new GUI. Commands: Ctrl+Shift+P, output: Ctrl+J" with a button that switches back to the classic GUI from the next start; the notice's having been shown is remembered in the app's `QSettings` store. Everything it offered stays reachable: commands through the palette, output in the bottom panel, buttons in the toolbar, progress in the status bar.
 
 **Approaches considered.**
 
@@ -44,25 +44,24 @@
 - Go-to mode accepts the loaded objects and selections and any selection string.
 - Built with approach A.
 - Every positional argument is asked in turn, pre-filled with its default; a value the search matched is filled in (reviewer question, accepted 2026-11-23).
-- The External GUI is off for every installation, with a one-time notice and a button to bring it back; no installer changes (reviewer question, accepted 2026-11-23).
+- The External GUI is off in the new GUI, with a one-time notice and a button back to the classic GUI; no switch of its own and no installer changes (one switch for all PyMOL+ GUI features, decided 2026-11-25).
 - The bottom panel opens on any traceback or `Error:` line, with a "Don't open on errors" option (reviewer question, accepted 2026-11-23).
 
 **Calls made in the design (Claude's, open to correction).**
 
-- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets two shared marked segment areas that every feature registers through: at start-up in `execapp()`, `pymol3.app.start(window)` before `window.show()` and `pymol3.app.ready(window)` after `initializePlugins()` (which clears the Plugin menu); and in `update_feedback()`, `pymol3.app.tick(window, feedback)` with every tick and feedback batch. Whichever feature lands first adds both areas, `pymol3.app`, and `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet. A feature adds a marked segment of its own only where it must change an existing method or class-level code, and names it here. This feature: `start` (install the palette and, from step 3, apply the External GUI setting), `tick` (feedback fan-out to the bottom panel); its own segment in `PyMOLQtGUI.__init__`, where the External GUI's visibility is decided from `options.external_gui` before any hook runs, so the remembered setting is read there and the External GUI never flashes.
-- The External GUI defaults to off in every installation, updated ones included (see Decisions); the setting is stored in the app's existing `QSettings('PyMOL-Open-Source', 'PyMOL-Open-Source')` (already used by `offer_to_remove_older_apps`).
+- **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets two shared marked segment areas that every feature registers through: at start-up in `execapp()`, `pymol3.app.start(window)` before `window.show()` and `pymol3.app.ready(window)` after `initializePlugins()` (which clears the Plugin menu); and in `update_feedback()`, `pymol3.app.tick(window, feedback)` with every tick and feedback batch. `pymol3.app` and the `start` and `ready` areas exist (branch `new-gui-switch`): a feature registers with `pymol3.app.register(pymol3.app.Feature(...))`, and the hooks run it only while the GUI style is `new`, chosen by the one switch (Display → New GUI, remembered; `--new-gui` or `--classic-gui`, or `PYMOL_PLUS_GUI`, for one start). In the classic style the feature does not run at all, so no feature adds a switch of its own. Whichever feature lands first adds the `tick` area and `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet. A feature adds a marked segment of its own only where it must change an existing method or class-level code, and names it here. This feature: `start` (install the palette and, from step 3, hide the External GUI), `tick` (feedback fan-out to the bottom panel); its own segment in `PyMOLQtGUI.__init__`, where the External GUI's visibility is decided from `options.external_gui` before any hook runs, so `pymol3.app.style()` is read there and the External GUI never flashes.
+- The External GUI follows the one new-GUI switch (see Decisions); the notice's flag and the recent commands are stored in the app's existing `QSettings('PyMOL-Open-Source', 'PyMOL-Open-Source')`, where the switch keeps `gui/style`.
 - Ctrl+J toggles the bottom panel, as in VS Code.
 - The bottom panel opens by itself on any traceback or `Error:` line, unless "Don't open on errors" is set (see Decisions).
 - After a go-to jump the target becomes `sele`.
-- Progress and Abort live in the status bar, whatever the External GUI setting.
+- Progress and Abort live in the status bar whenever the new GUI runs, External GUI or not.
 - Recent commands rank first in the palette. They are kept across restarts in the same `QSettings` store (the last 100 distinct command lines); the External GUI's in-memory history (`_setup_history`, at most 255 entries, not saved) stays as it is and is not merged with them.
-- "Show at start" lives only in the menu (Display → External GUI → Show at start): the Qt GUI has no preferences dialog, and building one is not part of this feature.
 
 **Facts from the code that bind the design.**
 
 - The External GUI's `update_feedback()` (`distribution/edited/pmg_qt/pymol_qt_gui.py`, around line 974) is the only reader of `cmd._get_feedback()`, which hands each line out once, and the same timer runs the setting callbacks (the window title among them). The hook must pass each feedback batch on to `pymol3` listeners rather than add a second reader, and the timer must keep running when the External GUI is off.
 - `update_progress()` drives the External GUI's progress bar and Abort button from `cmd.get_progress()`; the status bar uses the same source through a hook.
-- `options.external_gui` (`modules/pymol/invocation.py`) already hides the External GUI on `-x`-style starts; the new setting must not override an explicit command-line choice.
+- `options.external_gui` (`modules/pymol/invocation.py`) already hides the External GUI on `-x`-style starts; the new GUI hides it as well and never shows it against such an explicit command-line choice.
 - The edited copy applies to the app only; `modules/pmg_qt/pymol_qt_gui.py` is the upstream original checked by `distribution/edited/upstream.sha256`.
 
 ## Global Constraints
@@ -89,7 +88,7 @@ tools/bazel/requirements_lock*.txt
 
 ## Done
 
-All four steps below are merged into `production`, and a fresh app install starts with the toolbar and palette, without the External GUI.
+All four steps below are merged into `production`, and the app in the new GUI starts with the toolbar and palette, without the External GUI; in the classic GUI it starts as before.
 
 ## Non-goals
 
@@ -102,12 +101,12 @@ All four steps below are merged into `production`, and a fresh app install start
 
 ## Steps
 
-Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts. Every step leaves the app usable: the External GUI stays on by default until step 3, so nobody is left without a command input.
+Each step is one branch from `production` and one pull request into `production`; each step's own Superpowers plan goes to `.opp/plans/<branch>.md` when it starts. Every step leaves the app usable: the External GUI stays on, in the new GUI too, until step 3, so nobody is left without a command input.
 
 0. **Prerequisite (met):** `pymol3-dock-panels` merged into `production` (Convergent-Binding/pymol-plus#15), with the `pymol3` package and `pymol3.ui`.
-1. **Palette** (`command-palette`): the popup, the command index (names, argument signatures, help descriptions), ranking with recent commands first, argument suggestions, the hybrid input, Ctrl+Shift+P, and its registration through the shared GUI hooks (adding them if this lands first). Done when the palette runs commands in the app beside the unchanged External GUI.
+1. **Palette** (`command-palette`): the popup, the command index (names, argument signatures, help descriptions), ranking with recent commands first, argument suggestions, the hybrid input, Ctrl+Shift+P, and its registration through the shared GUI hooks (adding the `tick` area if this lands first). Done when the palette runs commands in the app beside the unchanged External GUI.
 2. **Bottom panel and layout toggles** (`command-output-panel`): the output panel docked at the bottom through `pymol3.ui` and hidden at start (`visible=False`, added by whichever feature lands first), fed by the feedback fan-out of the shared `pymol3.app.tick` hook; red tracebacks and `Error:` lines; Clear and Search; Ctrl+J; opening by itself on any traceback or `Error:` line, with the "Don't open on errors" option; the three layout toggles as actions with the remember-and-restore behaviour (placed in the toolbar in step 3, reachable from the menu until then).
-3. **Toolbar, status bar and the legacy setting** (`command-toolbar`): the toolbar with the search button, the quick buttons listed in Design and the layout toggles; progress and Abort in the status bar; the "Show at start" setting, default off for every installation, honouring an explicit command-line choice; the one-time notice with its button that switches the External GUI back on.
+3. **Toolbar, status bar and the legacy setting** (`command-toolbar`): the toolbar with the search button, the quick buttons listed in Design and the layout toggles; progress and Abort in the status bar; the External GUI hidden in the new GUI; the one-time notice with its button back to the classic GUI.
 4. **Go to** (`command-goto`): Ctrl+G and the go-to mode with objects, selections, short addresses (its own parser, tested on `A/45`, `B/100-120`, `HEM` and names that are objects) and selection strings; jump and `sele`.
 
 ## Review Focus
@@ -115,7 +114,7 @@ Each step is one branch from `production` and one pull request into `production`
 - **Feedback lost or shown twice.** With two consumers of PyMOL's output, a line may disappear from one view or the setting callbacks may stop when the External GUI is off. Each step 2 test feeds a batch through the hook and checks both views and a setting callback.
 - **Ctrl+Shift+P swallowed by the viewer.** The OpenGL widget handles keys itself; the shortcut must win while the viewer has focus and while the palette is closed. A test sends the key to the viewer widget offscreen.
 - **A step-by-step argument run that never ends.** Commands with arguments PyMOL cannot describe (no signature, `*args`) must fall back to free typing; a command without positional arguments runs at once.
-- **Startup with the External GUI off.** No flash of the External GUI, `-x`-style command-line options still win, and the one-time notice shows exactly once.
+- **Startup with the External GUI off.** No flash of the External GUI in the new GUI, the classic GUI unchanged, `-x`-style command-line options still win, and the one-time notice shows exactly once.
 - **The panel opening too often.** A burst of error lines opens the panel once, and "Don't open on errors" holds across restarts.
 
 ## Acceptance criteria
@@ -127,7 +126,7 @@ Each step is one branch from `production` and one pull request into `production`
 - Searching "surface" and picking `show` fills in `show surface,` and asks only for the atoms; Tab or Enter on a pre-filled default moves on.
 - Ctrl+J opens and closes the bottom panel; any traceback or `Error:` line opens it and shows in red, unless "Don't open on errors" is set.
 - The toolbar holds the search button, the quick buttons listed in Design and the three layout toggles; progress and Abort show in the status bar during a ray trace.
-- A fresh install and an updated one both start without the External GUI; the one-time notice shows once and its button brings the External GUI back; switching "Show at start" on brings it back after a restart.
+- In the new GUI the app starts without the External GUI; the one-time notice shows once and its button switches to the classic GUI, which brings the External GUI back after a restart; in the classic GUI it starts as before.
 - No upstream file changes (`modules/` outside `modules/pymol3/`); `bazel test //...` and `bazel test //distribution/...` pass.
 
 ## Verification
