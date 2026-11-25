@@ -267,6 +267,7 @@ def ready(window: QtWidgets.QMainWindow) -> None:
   Args:
     window: PyMOL's main window, shown and with its plugins loaded.
   """
+  _import_features()
   if style() == NEW:
     _run_all("ready", window)
   if _state.features:

@@ -132,7 +132,9 @@ def test_import_needs_no_qt_binding():
           sys.executable,
           "-c",
           "import sys, pymol3.app; "
-          "sys.exit('pymol.Qt' in sys.modules)",
+          "sys.exit(any(name == 'pymol.Qt' or name.split('.')[0] in "
+          "('PySide6', 'PyQt5', 'PyQt6', 'shiboken6') "
+          "for name in sys.modules))",
       ],
       env=tmp_environment,
       capture_output=True,
