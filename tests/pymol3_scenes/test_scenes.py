@@ -341,3 +341,201 @@ def test_thumbnail_loads_valid_png_and_rejects_zero_buffer_and_scrolls(
   assert not tmp_first_pixmap.isNull()
   assert tmp_second_pixmap is None
   assert tmp_view.verticalScrollBar().maximum() > 0
+
+
+def test_rename_via_f2_and_double_click_updates_pymol_preserving_spaces(
+    scene_window, monkeypatch
+):
+  """F2 and double-click rename in place, trimming ends and keeping spaces.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+    monkeypatch: Spies on ``pymol.cmd.scene`` for unchanged names.
+  """
+  pymol.cmd.scene("001", "store")
+  pymol.cmd.scene("002", "store")
+  scenes.start(scene_window)
+  scenes.ready(scene_window)
+  tmp_widget = ui.get_dock_panel(scenes.PANEL_ID).dock_widget.widget()
+  tmp_view = tmp_widget.list_view
+  tmp_model = tmp_view.model()
+  tmp_view.resize(260, 300)
+  qt.QtWidgets.QApplication.processEvents()
+
+  tmp_view.setCurrentIndex(tmp_model.index(0, 0))
+  _simulate_key_press(tmp_view, qt.QtCore.Qt.Key.Key_F2)
+  assert tmp_view.state() == qt.QtWidgets.QAbstractItemView.State.EditingState
+  assert pymol.cmd.get("scene_current_name") == "002"
+  tmp_editor = tmp_view.findChild(qt.QtWidgets.QLineEdit)
+  assert tmp_editor is not None
+  tmp_editor.setText("  Active site  ")
+  _simulate_key_press(tmp_editor, qt.QtCore.Qt.Key.Key_Return)
+  qt.QtWidgets.QApplication.processEvents()
+  qt.QtCore.QCoreApplication.sendPostedEvents(
+      None, qt.QtCore.QEvent.Type.DeferredDelete
+  )
+
+  assert pymol.cmd.get_scene_list() == ["Active site", "002"]
+  assert pymol.cmd.get("scene_current_name") == "002"
+  assert tmp_widget.notice_label.isHidden()
+
+  tmp_row_two_center = tmp_view.visualRect(tmp_model.index(1, 0)).center()
+  tmp_double_click = qt.QtGui.QMouseEvent(
+      qt.QtCore.QEvent.Type.MouseButtonDblClick,
+      qt.QtCore.QPointF(tmp_row_two_center),
+      qt.QtCore.QPointF(tmp_view.viewport().mapToGlobal(tmp_row_two_center)),
+      qt.QtCore.Qt.MouseButton.LeftButton,
+      qt.QtCore.Qt.MouseButton.LeftButton,
+      qt.QtCore.Qt.KeyboardModifier.NoModifier,
+  )
+  tmp_view.mouseDoubleClickEvent(tmp_double_click)
+  assert tmp_view.state() == qt.QtWidgets.QAbstractItemView.State.EditingState
+  tmp_editor_two = tmp_view.findChild(qt.QtWidgets.QLineEdit)
+  assert tmp_editor_two is not None
+  tmp_editor_two.setText("Final view")
+  _simulate_key_press(tmp_editor_two, qt.QtCore.Qt.Key.Key_Return)
+  qt.QtWidgets.QApplication.processEvents()
+  assert pymol.cmd.get_scene_list() == ["Active site", "Final view"]
+  assert pymol.cmd.get("scene_current_name") == "Final view"
+
+  tmp_scene_calls = []
+  tmp_real_scene = pymol.cmd.scene
+
+  def tmp_spy_scene(*args, **kwargs):
+    """Records ``cmd.scene`` calls while forwarding to PyMOL.
+
+    Args:
+      *args: Positional arguments for ``cmd.scene``.
+      **kwargs: Keyword arguments for ``cmd.scene``.
+
+    Returns:
+      Result of ``pymol.cmd.scene``.
+    """
+    tmp_scene_calls.append((args, kwargs))
+    return tmp_real_scene(*args, **kwargs)
+
+  monkeypatch.setattr(pymol.cmd, "scene", tmp_spy_scene)
+  tmp_unchanged = tmp_model.setData(
+      tmp_model.index(1, 0),
+      "Final view",
+      qt.QtCore.Qt.ItemDataRole.EditRole,
+  )
+  assert tmp_unchanged is False
+  assert tmp_scene_calls == []
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    ["001", "", "   ", "*", "new", "auto", "line\nbreak"],
+)
+def test_rename_refuses_duplicate_empty_and_reserved_names(
+    scene_window, capsys, bad_name
+):
+  """Duplicate, empty, multi-line, and reserved names are refused with reason.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+    capsys: Captures PyMOL stdout notice.
+    bad_name: Invalid rename target under test.
+  """
+  pymol.cmd.scene("001", "store")
+  pymol.cmd.scene("002", "store")
+  scenes.start(scene_window)
+  scenes.ready(scene_window)
+  tmp_widget = ui.get_dock_panel(scenes.PANEL_ID).dock_widget.widget()
+  tmp_model = tmp_widget.list_view.model()
+
+  tmp_accepted = tmp_model.setData(
+      tmp_model.index(1, 0),
+      bad_name,
+      qt.QtCore.Qt.ItemDataRole.EditRole,
+  )
+  assert tmp_accepted is False
+  assert pymol.cmd.get_scene_list() == ["001", "002"]
+  assert tmp_model.index(1, 0).data() == "002"
+  assert not tmp_widget.notice_label.isHidden()
+  assert tmp_widget.notice_label.text()
+  assert capsys.readouterr().out.strip()
+
+
+def test_drag_reorder_updates_pymol_playback_order_once_without_recall(
+    scene_window, monkeypatch
+):
+  """Dragging a row reorders PyMOL playback once and never recalls or loops.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+    monkeypatch: Spies on ``cmd.scene_order`` and ``cmd.scene``.
+  """
+  pymol.cmd.scene("001", "store")
+  pymol.cmd.scene("binding pocket", "store")
+  pymol.cmd.scene("003", "store")
+  scenes.start(scene_window)
+  scenes.ready(scene_window)
+  tmp_widget = ui.get_dock_panel(scenes.PANEL_ID).dock_widget.widget()
+  tmp_view = tmp_widget.list_view
+  tmp_model = tmp_view.model()
+  tmp_view.resize(260, 300)
+  qt.QtWidgets.QApplication.processEvents()
+
+  tmp_order_calls = []
+  tmp_real_order = pymol.cmd.scene_order
+
+  def tmp_spy_order(names, *args, **kwargs):
+    """Records ``cmd.scene_order`` calls while forwarding to PyMOL.
+
+    Args:
+      names: Ordered scene names passed to ``scene_order``.
+      *args: Extra positional arguments.
+      **kwargs: Extra keyword arguments.
+
+    Returns:
+      Result of ``pymol.cmd.scene_order``.
+    """
+    tmp_order_calls.append((list(names), kwargs.get("location")))
+    return tmp_real_order(names, *args, **kwargs)
+
+  tmp_scene_calls = []
+  tmp_real_scene = pymol.cmd.scene
+
+  def tmp_spy_scene(*args, **kwargs):
+    """Records ``cmd.scene`` calls while forwarding to PyMOL.
+
+    Args:
+      *args: Positional arguments for ``cmd.scene``.
+      **kwargs: Keyword arguments for ``cmd.scene``.
+
+    Returns:
+      Result of ``pymol.cmd.scene``.
+    """
+    tmp_scene_calls.append(args)
+    return tmp_real_scene(*args, **kwargs)
+
+  monkeypatch.setattr(pymol.cmd, "scene_order", tmp_spy_order)
+  monkeypatch.setattr(pymol.cmd, "scene", tmp_spy_scene)
+
+  tmp_mime = tmp_model.mimeData([tmp_model.index(2, 0)])
+  tmp_top_point = tmp_view.visualRect(tmp_model.index(0, 0)).topLeft()
+  tmp_drop_position = qt.QtCore.QPointF(
+      tmp_top_point.x() + 10, tmp_top_point.y() + 2
+  )
+  tmp_drop = qt.QtGui.QDropEvent(
+      tmp_drop_position,
+      qt.QtCore.Qt.DropAction.MoveAction,
+      tmp_mime,
+      qt.QtCore.Qt.MouseButton.LeftButton,
+      qt.QtCore.Qt.KeyboardModifier.NoModifier,
+  )
+  monkeypatch.setattr(tmp_drop, "source", lambda: tmp_view)
+  tmp_view.dropEvent(tmp_drop)
+
+  assert pymol.cmd.get_scene_list() == ["003", "001", "binding pocket"]
+  assert tmp_order_calls == [(["003", "001", "binding pocket"], "top")]
+  assert tmp_scene_calls == []
+
+  scenes.tick(scene_window)
+  scenes.tick(scene_window)
+  assert len(tmp_order_calls) == 1
+
+  pymol.cmd.scene("", "next")
+  assert pymol.cmd.get("scene_current_name") == "001"

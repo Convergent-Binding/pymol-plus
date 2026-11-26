@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import dataclasses
 import importlib
+from collections.abc import Callable
 
 import pymol.Qt
 from pymol3 import scenes
@@ -43,6 +44,9 @@ PIXMAP_ROLE = int(QtCore.Qt.ItemDataRole.UserRole) + 1
 
 IS_CURRENT_ROLE = int(QtCore.Qt.ItemDataRole.UserRole) + 2
 """Model role returning True when the row represents the current scene."""
+
+SCENE_ROW_MIME = "application/x-pymol3-scene-row"
+"""MIME type carrying the dragged scene row index during reordering."""
 
 
 @dataclasses.dataclass
@@ -100,6 +104,19 @@ class _ScenesListModel(QtCore.QAbstractListModel):
     """Ordered scene entries matching PyMOL's ``get_scene_list()``."""
     self._current_name: str = ""
     """Name of the scene currently active in PyMOL, or empty string."""
+    self._rename_handler: Callable[[int, str], bool] | None = None
+    """Optional callback validating and applying inline scene renames."""
+
+  def set_rename_handler(
+      self, handler: Callable[[int, str], bool] | None
+  ) -> None:
+    """Registers the callback invoked when an inline edit commits.
+
+    Args:
+      handler: Callable taking ``(row, proposed_name)`` and returning True if
+        the rename succeeded.
+    """
+    self._rename_handler = handler
 
   def rowCount(
       self, parent: QtCore.QModelIndex = QtCore.QModelIndex()
@@ -243,6 +260,110 @@ class _ScenesListModel(QtCore.QAbstractListModel):
           self.index(len(self._entries) - 1, 0),
           [IS_CURRENT_ROLE],
       )
+
+  def setData(
+      self,
+      index: QtCore.QModelIndex,
+      value: object,
+      role: int = int(QtCore.Qt.ItemDataRole.EditRole),
+  ) -> bool:
+    """Delegates committed inline edits to the registered rename handler.
+
+    Args:
+      index: Model index being edited.
+      value: Committed editor text.
+      role: Qt item data role.
+
+    Returns:
+      True when the rename succeeded, else False.
+    """
+    if (
+        not index.isValid()
+        or role != int(QtCore.Qt.ItemDataRole.EditRole)
+        or self._rename_handler is None
+    ):
+      return False
+    return self._rename_handler(index.row(), str(value))
+
+  def rename_at(self, row: int, new_name: str, current_name: str) -> None:
+    """Updates the cached scene name in place after a PyMOL rename.
+
+    Args:
+      row: Zero-based row index to rename.
+      new_name: Accepted new scene name.
+      current_name: Updated ``scene_current_name`` in PyMOL.
+    """
+    if not (0 <= row < len(self._entries)):
+      return
+    self._entries[row].name = new_name
+    self._current_name = current_name
+    tmp_index = self.index(row, 0)
+    self.dataChanged.emit(tmp_index, tmp_index)
+
+  def supportedDropActions(self) -> QtCore.Qt.DropAction:
+    """Restricts drag-and-drop reordering to move operations.
+
+    Returns:
+      ``Qt.DropAction.MoveAction``.
+    """
+    return QtCore.Qt.DropAction.MoveAction
+
+  def mimeTypes(self) -> list[str]:
+    """Lists MIME formats produced for dragging scene rows.
+
+    Returns:
+      Single-element list containing :data:`SCENE_ROW_MIME`.
+    """
+    return [SCENE_ROW_MIME]
+
+  def mimeData(self, indexes: list[QtCore.QModelIndex]) -> QtCore.QMimeData:
+    """Encodes the dragged row index into ``QMimeData``.
+
+    Args:
+      indexes: Selected model indexes being dragged.
+
+    Returns:
+      ``QMimeData`` carrying the source row index.
+    """
+    tmp_mime = QtCore.QMimeData()
+    if indexes and indexes[0].isValid():
+      tmp_payload = str(indexes[0].row()).encode("ascii")
+      tmp_mime.setData(SCENE_ROW_MIME, tmp_payload)
+    return tmp_mime
+
+  def move_row(self, source_row: int, destination_row: int) -> bool:
+    """Moves one entry from ``source_row`` to ``destination_row``.
+
+    Args:
+      source_row: Current zero-based row index.
+      destination_row: Final zero-based row index after the move.
+
+    Returns:
+      True when a move occurred, False when indices are invalid or equal.
+    """
+    tmp_count = len(self._entries)
+    if (
+        not (0 <= source_row < tmp_count)
+        or not (0 <= destination_row < tmp_count)
+        or source_row == destination_row
+    ):
+      return False
+    tmp_qt_target = (
+        destination_row + 1
+        if destination_row > source_row
+        else destination_row
+    )
+    self.beginMoveRows(
+        QtCore.QModelIndex(),
+        source_row,
+        source_row,
+        QtCore.QModelIndex(),
+        tmp_qt_target,
+    )
+    tmp_entry = self._entries.pop(source_row)
+    self._entries.insert(destination_row, tmp_entry)
+    self.endMoveRows()
+    return True
 
 
 class _SceneItemDelegate(QtWidgets.QStyledItemDelegate):
@@ -437,6 +558,9 @@ class _ScenesListView(QtWidgets.QListView):
   delete_requested = QtCore.Signal(str)
   """Signal emitted with a scene name from the row button, Delete, or menu."""
 
+  reorder_requested = QtCore.Signal(int, int)
+  """Signal emitted with ``(source_row, destination_row)`` on row drop."""
+
   def __init__(self, parent: QtWidgets.QWidget | None = None) -> None:
     """Configures scrolling, single selection, and custom edit triggers.
 
@@ -460,6 +584,13 @@ class _ScenesListView(QtWidgets.QListView):
         QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOff
     )
     self.setUniformItemSizes(True)
+    self.setDragEnabled(True)
+    self.setAcceptDrops(True)
+    self.setDropIndicatorShown(True)
+    self.setDragDropMode(
+        QtWidgets.QAbstractItemView.DragDropMode.InternalMove
+    )
+    self.setDefaultDropAction(QtCore.Qt.DropAction.MoveAction)
     self._press_position: QtCore.QPoint | None = None
     """Viewport position of the active left mouse press, if any."""
     self._pressed_index = QtCore.QModelIndex()
@@ -636,6 +767,46 @@ class _ScenesListView(QtWidgets.QListView):
     tmp_menu = self.build_context_menu(tmp_index)
     tmp_menu.exec(event.globalPos())
 
+  def dropEvent(self, event: QtGui.QDropEvent) -> None:
+    """Commits an internal row drag as an atomic reorder without recall.
+
+    Args:
+      event: Qt drop event.
+    """
+    tmp_mime = event.mimeData()
+    tmp_model = self.model()
+    if (
+        event.source() not in (self, None)
+        or tmp_mime is None
+        or not tmp_mime.hasFormat(SCENE_ROW_MIME)
+        or tmp_model is None
+        or tmp_model.rowCount() == 0
+    ):
+      event.ignore()
+      return
+    try:
+      tmp_source_row = int(bytes(tmp_mime.data(SCENE_ROW_MIME)).decode("ascii"))
+    except ValueError:
+      event.ignore()
+      return
+    tmp_position = event.position().toPoint()
+    tmp_target_index = self.indexAt(tmp_position)
+    if not tmp_target_index.isValid():
+      tmp_slot = tmp_model.rowCount()
+    elif tmp_position.y() > self.visualRect(tmp_target_index).center().y():
+      tmp_slot = tmp_target_index.row() + 1
+    else:
+      tmp_slot = tmp_target_index.row()
+    tmp_destination = (
+        tmp_slot - 1 if tmp_slot > tmp_source_row else tmp_slot
+    )
+    tmp_destination = max(0, min(tmp_model.rowCount() - 1, tmp_destination))
+    self._press_position = None
+    self._pressed_index = QtCore.QModelIndex()
+    self._pressed_delete = False
+    self.reorder_requested.emit(tmp_source_row, tmp_destination)
+    event.acceptProposedAction()
+
 
 class ScenesPanelWidget(QtWidgets.QWidget):
   """Top-level widget docked inside the Scenes panel."""
@@ -759,12 +930,14 @@ class ScenesController:
     """Whether ``scenes_changed`` fired since the last sync."""
 
     self._widget.list_view.setModel(self._model)
+    self._model.set_rename_handler(self.rename_scene)
     self._widget.list_view.setItemDelegate(self._delegate)
     self._widget.add_button.clicked.connect(self.create_scene)
     self._widget.update_button.clicked.connect(self.update_selected_scene)
     self._widget.list_view.recall_requested.connect(self.recall_scene)
     self._widget.list_view.update_requested.connect(self.update_scene)
     self._widget.list_view.delete_requested.connect(self.delete_scene)
+    self._widget.list_view.reorder_requested.connect(self.reorder_scene)
     self._widget.list_view.selectionModel().selectionChanged.connect(
         self._update_buttons
     )
@@ -915,9 +1088,9 @@ class ScenesController:
 
   def on_tick(self) -> None:
     """Runs on PyMOL's 500 ms timer to catch unnotified scene changes."""
-    if (
-        self._widget.list_view.state()
-        == QtWidgets.QAbstractItemView.State.EditingState
+    if self._widget.list_view.state() in (
+        QtWidgets.QAbstractItemView.State.EditingState,
+        QtWidgets.QAbstractItemView.State.DraggingState,
     ):
       return
     tmp_names = list(self._cmd.get_scene_list() or ())
@@ -943,7 +1116,7 @@ class ScenesController:
     """Saves the current view as a new auto-numbered scene."""
     self._widget.clear_notice()
     self._cmd.scene("new", "store")
-    self.sync(refresh_thumbnails=True, auto_open=True)
+    self.sync(refresh_thumbnails=False, auto_open=True)
     if self._current_name:
       self._select_scene(self._current_name)
 
@@ -987,6 +1160,67 @@ class ScenesController:
     self._cmd.scene(name, "clear")
     self._entries_by_name.pop(name, None)
     self.sync(refresh_thumbnails=False)
+
+  def rename_scene(self, row: int, proposed_name: str) -> bool:
+    """Validates and applies an in-place scene rename in PyMOL.
+
+    Args:
+      row: Zero-based row index being renamed.
+      proposed_name: Raw text entered by the user.
+
+    Returns:
+      True when PyMOL renamed the scene, else False.
+    """
+    tmp_entry = self._model.entry_at(row)
+    if tmp_entry is None:
+      return False
+    tmp_old_name = tmp_entry.name
+    tmp_cleaned, tmp_reason = scenes.validate_scene_name(
+        tmp_old_name, proposed_name, self._model.names()
+    )
+    if tmp_reason is not None:
+      self._widget.show_notice(tmp_reason)
+      tmp_rectangle = self._widget.list_view.visualRect(
+          self._model.index(row, 0)
+      )
+      tmp_global = self._widget.list_view.viewport().mapToGlobal(
+          tmp_rectangle.center()
+      )
+      QtWidgets.QToolTip.showText(
+          tmp_global,
+          tmp_reason,
+          self._widget.list_view,
+          tmp_rectangle,
+      )
+      print(f" PyMOL+: cannot rename scene {tmp_old_name!r}: {tmp_reason}")
+      return False
+    if tmp_cleaned is None:
+      self._widget.clear_notice()
+      return False
+    self._widget.clear_notice()
+    self._cmd.scene(tmp_old_name, "rename", new_key=tmp_cleaned)
+    self._entries_by_name.pop(tmp_old_name, None)
+    tmp_entry.name = tmp_cleaned
+    self._entries_by_name[tmp_cleaned] = tmp_entry
+    self._current_name = str(self._cmd.get("scene_current_name") or "")
+    self._model.rename_at(row, tmp_cleaned, self._current_name)
+    return True
+
+  def reorder_scene(self, source_row: int, destination_row: int) -> None:
+    """Reorders scenes in the model and sends the new order to PyMOL.
+
+    Args:
+      source_row: Zero-based index of the dragged scene.
+      destination_row: Zero-based index where the scene landed.
+    """
+    self._widget.clear_notice()
+    if not self._model.move_row(source_row, destination_row):
+      return
+    tmp_ordered = self._model.names()
+    self._cmd.scene_order(tmp_ordered, location="top")
+    self._widget.list_view.setCurrentIndex(
+        self._model.index(destination_row, 0)
+    )
 
 
 def install(window: QtWidgets.QMainWindow) -> ScenesController:
