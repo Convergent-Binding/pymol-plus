@@ -496,3 +496,46 @@ def test_none_widget_raises_type_error(main_window):
   with pytest.raises(TypeError):
     ui.add_dock_panel(None, "Sequences")
   assert main_window.findChildren(qt.QtWidgets.QDockWidget) == []
+
+
+def test_visible_false_starts_hidden_and_unchecked(main_window):
+  """visible=False keeps the dock hidden and its menu entry unchecked.
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_panel = ui.add_dock_panel(
+      qt.QtWidgets.QLabel(), "Scenes", visible=False
+  )
+  [[tmp_entry]] = _plugin_panels_actions(main_window)
+  assert not tmp_panel.is_visible()
+  assert tmp_panel.dock_widget.isHidden()
+  assert ui.get_dock_panel("Scenes") is tmp_panel
+  assert not tmp_entry.isChecked()
+  tmp_panel.show()
+  assert tmp_panel.is_visible()
+  assert tmp_entry.isChecked()
+
+
+def test_hidden_panel_tabs_cleanly_when_shown_beside_second_panel(main_window):
+  """A hidden panel in the same area joins tabs and raises on show().
+
+  Args:
+    main_window: The window PyMOL returns.
+  """
+  tmp_first = ui.add_dock_panel(
+      qt.QtWidgets.QLabel(), "Scenes", area="right", visible=False
+  )
+  tmp_second = ui.add_dock_panel(
+      qt.QtWidgets.QLabel(), "Objects", area="right", visible=True
+  )
+  assert not tmp_first.is_visible()
+  assert tmp_second.is_visible()
+  tmp_first.show()
+  assert tmp_first.is_visible()
+  assert tmp_second.dock_widget in main_window.tabifiedDockWidgets(
+      tmp_first.dock_widget
+  )
+  assert ([["Scenes", "Objects"], "Scenes"]
+          in [list(tmp_pair) for tmp_pair in _tab_titles_and_current(
+              main_window)])

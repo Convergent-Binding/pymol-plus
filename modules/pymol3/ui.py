@@ -144,6 +144,7 @@ def add_dock_panel(
     area: str | QtCore.Qt.DockWidgetArea = "right",
     panel_id: str | None = None,
     floating: bool = False,
+    visible: bool = True,
 ) -> DockPanel:
   """Docks a plugin's widget as a panel in PyMOL's main window.
 
@@ -155,6 +156,7 @@ def add_dock_panel(
     panel_id: The id to find the panel by; the title when left out.
     floating: Whether the panel starts floating instead of docked; it
       docks back into ``area``.
+    visible: Whether the panel starts shown or hidden.
 
   Returns:
     The panel.
@@ -196,9 +198,12 @@ def add_dock_panel(
   tmp_menu = _plugin_panels_menu(tmp_window, create=True)
   if tmp_menu is not None:
     tmp_menu.addAction(tmp_dock_widget.toggleViewAction())
-  # Shown at once rather than at the window's next layout pass, so the menu
-  # entry is checked and the panel counts as visible from the start.
-  tmp_dock_widget.show()
+  # Shown or hidden at once rather than at the window's next layout pass, so
+  # the menu entry and is_visible() match ``visible`` from the start.
+  if visible:
+    tmp_dock_widget.show()
+  else:
+    tmp_dock_widget.hide()
   tmp_panel = DockPanel(tmp_panel_id, tmp_dock_widget, tmp_window)
   tmp_panels[tmp_panel_id] = tmp_panel
   return tmp_panel

@@ -16,6 +16,9 @@ from ..pymol3_ui import qt_binding
 qt = qt_binding.import_qt()
 """The Qt binding PyMOL found."""
 
+_DEFAULT_FEATURE_MODULES = app.FEATURE_MODULES
+"""Feature modules configured on ``pymol3.app`` by default."""
+
 
 class _Recorder:
   """A feature's callbacks that note each call in a shared list."""
@@ -406,3 +409,138 @@ def test_menu_needs_no_display_menu(bare_main_window):
   app.register(app.Feature(name="objects"))
   app.start(bare_main_window)
   app.ready(bare_main_window)
+
+
+def test_classic_style_runs_no_tick(main_window):
+  """In the classic style tick callbacks do not run.
+
+  Args:
+    main_window: The main window.
+  """
+  tmp_calls = []
+  app.register(
+      app.Feature(
+          name="scenes",
+          tick=lambda window, feedback: tmp_calls.append(feedback),
+      )
+  )
+  app.start(main_window)
+  app.tick(main_window, ["line"])
+  assert tmp_calls == []
+
+
+def test_new_style_runs_tick_with_feedback(monkeypatch, main_window):
+  """In the new style tick delivers feedback batches to each feature.
+
+  Args:
+    monkeypatch: Sets the environment variable.
+    main_window: The main window.
+  """
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, app.NEW)
+  tmp_calls = []
+  app.register(
+      app.Feature(
+          name="scenes",
+          tick=lambda window, feedback: tmp_calls.append(
+              ("scenes", window, feedback)
+          ),
+      )
+  )
+  app.register(
+      app.Feature(
+          name="palette",
+          tick=lambda window, feedback: tmp_calls.append(
+              ("palette", window, feedback)
+          ),
+      )
+  )
+  app.start(main_window)
+  app.tick(main_window, ["a", "b"])
+  app.tick(main_window)
+  assert tmp_calls == [
+      ("scenes", main_window, ("a", "b")),
+      ("palette", main_window, ("a", "b")),
+      ("scenes", main_window, ()),
+      ("palette", main_window, ()),
+  ]
+
+
+def test_failing_tick_disables_feature_and_runs_others(
+    monkeypatch, main_window, capsys
+):
+  """A feature that raises in tick is disabled while others keep ticking.
+
+  Args:
+    monkeypatch: Sets the environment variable.
+    main_window: The main window.
+    capsys: Captures PyMOL's output.
+  """
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, app.NEW)
+  tmp_calls = []
+
+  def tmp_fail(window, feedback):
+    """Fails on tick as a broken feature would.
+
+    Args:
+      window: The main window.
+      feedback: Feedback lines.
+
+    Raises:
+      RuntimeError: Always.
+    """
+    raise RuntimeError("broken tick")
+
+  app.register(app.Feature(name="broken", tick=tmp_fail))
+  app.register(
+      app.Feature(
+          name="scenes",
+          tick=lambda window, feedback: tmp_calls.append(feedback),
+      )
+  )
+  app.start(main_window)
+  app.tick(main_window, ["first"])
+  app.tick(main_window, ["second"])
+  assert tmp_calls == [("first",), ("second",)]
+  tmp_output = capsys.readouterr().out
+  assert "broken tick" in tmp_output
+  assert "failed in tick" in tmp_output
+
+
+def test_feature_failed_in_start_skips_tick(monkeypatch, main_window, capsys):
+  """A feature that failed in start never receives tick calls.
+
+  Args:
+    monkeypatch: Sets the environment variable.
+    main_window: The main window.
+    capsys: Captures PyMOL's output.
+  """
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, app.NEW)
+  tmp_calls = []
+
+  def tmp_fail(window):
+    """Fails during start.
+
+    Args:
+      window: The main window.
+
+    Raises:
+      RuntimeError: Always.
+    """
+    raise RuntimeError("broken start")
+
+  app.register(
+      app.Feature(
+          name="broken",
+          start=tmp_fail,
+          tick=lambda window, feedback: tmp_calls.append(feedback),
+      )
+  )
+  app.start(main_window)
+  app.tick(main_window, ["line"])
+  assert tmp_calls == []
+  assert "broken start" in capsys.readouterr().out
+
+
+def test_default_feature_modules_includes_scenes():
+  """Default FEATURE_MODULES includes the docked Scenes panel feature."""
+  assert "pymol3.scenes" in _DEFAULT_FEATURE_MODULES

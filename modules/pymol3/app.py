@@ -31,6 +31,7 @@ import os
 import sys
 import traceback
 from collections.abc import Callable
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -56,7 +57,7 @@ The app's ``startup_wrapper.py`` sets it from ``--new-gui`` and
 ``--classic-gui`` under the same name, before this package can be imported.
 """
 
-FEATURE_MODULES: tuple[str, ...] = ()
+FEATURE_MODULES: tuple[str, ...] = ("pymol3.scenes",)
 """The modules of the PyMOL+ GUI features, imported by ``start``."""
 
 SETTINGS_ORGANIZATION = "PyMOL-Open-Source"
@@ -77,6 +78,9 @@ _ACTION_NAME = "pymol3_app_new_gui"
 Callback = Callable[["QtWidgets.QMainWindow"], None]
 """A feature's start or ready function; it receives PyMOL's main window."""
 
+TickCallback = Callable[["QtWidgets.QMainWindow", Sequence[str]], None]
+"""A feature's tick function; it receives the window and feedback lines."""
+
 
 @dataclasses.dataclass(frozen=True)
 class Feature:
@@ -86,11 +90,13 @@ class Feature:
     name: The feature's unique name, used in messages.
     start: Runs before the main window is shown, or None.
     ready: Runs once the plugins are loaded, or None.
+    tick: Runs on PyMOL's feedback tick with feedback lines, or None.
   """
 
   name: str
   start: Callback | None = None
   ready: Callback | None = None
+  tick: TickCallback | None = None
 
 
 class _State:
@@ -274,22 +280,42 @@ def ready(window: QtWidgets.QMainWindow) -> None:
     _add_menu_entry(window)
 
 
-def _run_all(phase: str, window: QtWidgets.QMainWindow) -> None:
+def tick(
+    window: QtWidgets.QMainWindow,
+    feedback: Sequence[str] = (),
+) -> None:
+  """Runs every feature's tick in the new style with one feedback batch.
+
+  Args:
+    window: PyMOL's main window.
+    feedback: Feedback lines collected on this tick.
+  """
+  _import_features()
+  if style() == NEW:
+    _run_all("tick", window, (tuple(feedback),))
+
+
+def _run_all(
+    phase: str,
+    window: QtWidgets.QMainWindow,
+    extra: tuple[object, ...] = (),
+) -> None:
   """Runs one phase of every feature that has not failed.
 
   A feature that raises is reported and runs no more in this run; the
   others still run.
 
   Args:
-    phase: ``"start"`` or ``"ready"``.
+    phase: ``"start"``, ``"ready"`` or ``"tick"``.
     window: PyMOL's main window.
+    extra: Extra positional arguments passed after ``window``.
   """
   for tmp_feature in list(_state.features.values()):
     tmp_callback = getattr(tmp_feature, phase)
     if tmp_callback is None or tmp_feature.name in _state.failed:
       continue
     try:
-      tmp_callback(window)
+      tmp_callback(window, *extra)
     # Any error of one feature must leave PyMOL and the other features
     # starting, so every exception is caught and reported here.
     except Exception:

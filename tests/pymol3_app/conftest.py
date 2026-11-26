@@ -31,6 +31,7 @@ def fresh_switch(monkeypatch: pytest.MonkeyPatch, tmp_path):
   tmp_qt = qt_binding.import_qt()
   tmp_path_to_store = str(tmp_path / "settings.ini")
   monkeypatch.setattr(app, "_state", app._State())
+  monkeypatch.setattr(app, "FEATURE_MODULES", ())
   monkeypatch.setattr(
       app,
       "_open_settings",

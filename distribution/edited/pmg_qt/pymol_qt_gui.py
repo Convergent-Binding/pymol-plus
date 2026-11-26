@@ -922,6 +922,14 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self.shortcut_menu_filter_dialog.show()
 
     def scene_panel_menu_dialog(self):
+        # BEGIN EDITED CODE SEGMENT
+        # :author Hannah Kullik
+        # In the new GUI, Scene -> Scenes... opens the docked Scenes panel;
+        # the classic GUI keeps PyMOL's floating ScenePanel dialog.
+        import pymol3.scenes
+        if pymol3.scenes.open_panel(self):
+            return
+        # END EDITED CODE SEGMENT
         from .scene_bin_gui import ScenePanel
 
         if self.scene_panel_dialog is None:
@@ -987,6 +995,14 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                 current_value = self.cmd.get_setting_tuple(setting)[1][0]
                 for callback in self.setting_callbacks[setting]:
                     callback(current_value)
+
+        # BEGIN EDITED CODE SEGMENT
+        # :author Hannah Kullik
+        # PyMOL+ GUI features follow PyMOL's 500 ms tick and receive each
+        # feedback batch, after setting_callbacks have run, in the new GUI only
+        import pymol3.app
+        pymol3.app.tick(self, feedback or ())
+        # END EDITED CODE SEGMENT
 
         self.feedback_timer.start(500)
 

@@ -18,7 +18,7 @@
 - A **+** button at the top saves the current view as a new scene with an automatically numbered name (`cmd.scene("new", "store")`, which names scenes `001`, `002`, …).
 - **Recall:** a plain click on an entry, or Enter on the selected entry, recalls the scene, with PyMOL's usual scene animation. Moving the selection with the arrow keys, right-clicking, starting a drag, or selecting an entry before F2 or Delete does **not** recall it.
 - **Update:** an Update button and the entry's right-click menu store everything on screen into the selected scene, as PyMOL's own update does (camera, colours, representations, enabled objects, movie frame), keep the scene's message, and refresh its thumbnail. No key shortcut: Ctrl+S already saves the session (`pymol_qt_gui.py`, line 405).
-- **Rename:** double-click on the name or F2 edits it in place; the scene is renamed in PyMOL (`scene <old>, rename, new_key=<new>`). A name already in use is refused and the old name stays.
+- **Rename:** double-click on the name or F2 edits it in place; the scene is renamed in PyMOL (`scene <old>, rename, new_key=<new>`). Empty, whitespace-only, duplicate, multi-line, or reserved PyMOL keys (`*`, `new`, `auto`) are refused, the old name stays, and the reason is shown inline and as a tooltip (no modal dialog).
 - **Reorder:** drag and drop; the new order goes to PyMOL with `scene_order`, so PgUp/PgDn play the scenes in that order.
 - **Remove:** a delete button on each entry, the right-click menu and the Delete key remove the scene (`scene <name>, clear`).
 - The entry of the current scene is highlighted. The scene's message, if it has one, shows as the entry's tooltip; it is not edited here.
@@ -42,7 +42,7 @@
 
 - **Shared GUI hooks** (all PyMOL+ GUI features: `command-palette.md`, `scenes-panel.md`, `objects-panel.md`, `project-library.md`, `mcp-server.md`): the app's edited `pymol_qt_gui.py` gets two shared marked segment areas that every feature registers through: at start-up in `execapp()`, `pymol3.app.start(window)` before `window.show()` and `pymol3.app.ready(window)` after `initializePlugins()` (which clears the Plugin menu); and in `update_feedback()`, `pymol3.app.tick(window, feedback)` with every tick and feedback batch. `pymol3.app` and the `start` and `ready` areas exist (branch `new-gui-switch`): a feature's module is added to `pymol3.app.FEATURE_MODULES`, which `start` imports in both styles, and registers with `pymol3.app.register(pymol3.app.Feature(...))` when imported, creating no widget then; the hooks run it only while the GUI style is `new`, chosen by the one switch (Display → New GUI, remembered; `--new-gui` or `--classic-gui`, or `PYMOL_PLUS_GUI`, for one start). In the classic style its `start` and `ready` do not run, so no feature adds a switch of its own. Whichever feature lands first adds the `tick` area and `pymol3.ui.add_dock_panel(..., visible=True)` if it is not there yet. A feature adds a marked segment of its own only where it must change an existing method or class-level code, and names it here. This feature: `start` (create the panel hidden), `tick` (scene sync); its own segment in `scene_panel_menu_dialog()`.
 - The panel stays in sync with scene changes made anywhere (palette, scripts, PgUp/PgDn, the scene buttons) and highlights the current scene.
-- **Scene → Scenes…** opens the new panel; the old window is no longer reachable from the menu, but its upstream file stays unchanged.
+- **Scene → Scenes…** opens the new panel in the new GUI (`pymol3.app.style() == pymol3.app.NEW`); in the classic GUI it still opens PyMOL's existing `ScenePanel` window, whose upstream file stays unchanged.
 - The panel is closed at start and opens by itself, once per app run, on the first scene created (in the panel, the palette, a script or Ctrl+F1) or on opening a session (.pse) that holds scenes. With the project library (`project-library.md`), which reopens the last chat at start, that means the panel opens at start whenever that chat holds scenes. Once the user closes it, it stays closed until the next start unless opened by hand.
 - The scene message is a read-only tooltip.
 - Update has no key shortcut, because Ctrl+S saves the session.
@@ -54,7 +54,7 @@
 - Every `scene` call sets the setting `scenes_changed` (index 254, `layer3/MovieScene.cpp`), and `scene_current_name` (index 396) changes with the current scene. The Qt GUI already polls `get_setting_updates()` every 500 ms and hands changes to `self.setting_callbacks` (`update_feedback()` in the edited `pymol_qt_gui.py`). The panel registers there; it never calls `get_setting_updates()` itself, which clears the flags and would take them from the GUI. `scene_order` and session restore do not set `scenes_changed`, so a cheap comparison of `get_scene_list()` on the same tick covers them.
 - PyMOL never refuses a rename: `MovieSceneRename` silently overwrites a scene that already has the new name and drops it from the order, and an empty `new_key` deletes the scene. The panel's own check is the only protection.
 - `scene <name>, update` keeps only the message of the scene now on screen (`_scene_get_current_message` in `modules/pymol/viewing.py`), so updating another scene would erase or copy messages; the panel passes `message=cmd.get_scene_message(name)` explicitly. Update also makes that scene the current one.
-- A thumbnail is taken on the next redraw (`SceneDeferImage`), so `get_scene_thumbnail()` right after a store can be empty; it is also empty for scenes from old sessions. The panel shows a placeholder and fetches again on a later tick until a thumbnail arrives.
+- A thumbnail is allocated as a zeroed RGBA buffer (`220 × 124 × 4` bytes) and PNG-encoded only on the next redraw (`SceneDeferImage`), while `.pse` sessions omit thumbnails completely (`b""`). The panel validates thumbnail bytes via `QPixmap.loadFromData(..., "PNG")`, shows a placeholder until valid, and retries missing thumbnails for at most 5 ticks per scene change.
 - `CTRL-F1`…`CTRL-F12` are PyMOL shortcuts that store scenes `F1`…`F12` (`modules/pymol/shortcut_dict.py`); these scenes appear in the panel like any other.
 
 ## Global Constraints
@@ -96,12 +96,12 @@ One step, one branch `scenes-panel` from `production`, one pull request into `pr
 
 - **Rename to a name in use, or to an empty name.** PyMOL would silently overwrite the other scene or delete this one; the panel must keep the old name and say why. Covered by a rename test with a duplicate and an empty name.
 - **Sync loops.** A reorder sent with `scene_order` comes back as a changed list; the panel must not rebuild the list under the user's drag or re-send the order. Covered by a test that reorders and checks one `scene_order` call.
-- **Thumbnail cost.** Fetching every thumbnail on every timer tick would stall the GUI with many scenes; thumbnails are fetched on change, and again only while still empty. Covered by a test that counts `get_scene_thumbnail` calls across idle ticks once every thumbnail has arrived.
+- **Thumbnail cost.** Fetching every thumbnail on every timer tick would stall the GUI with many scenes; thumbnails are fetched on change, and retried for at most 5 ticks while invalid/empty. Covered by a test that counts `get_scene_thumbnail` calls across idle ticks once every thumbnail has arrived or exhausted retries.
 - **Messages lost on Update.** Updating a scene that is not on screen must keep its own message. Covered by a test with two scenes and two messages.
 
 ## Acceptance criteria
 
-- Scene → Scenes… opens the panel on the right; the old window no longer opens from the menu.
+- In the new GUI, Scene → Scenes… opens the docked panel on the right instead of the old floating window; in the classic GUI, Scene → Scenes… still opens the classic window.
 - The panel lists every scene with thumbnail and name in PyMOL's order, and scrolls vertically with more scenes than fit.
 - **+** creates a new numbered scene from the current view; the panel opens by itself once per app run on the first new scene or on opening a .pse with scenes, and stays closed after the user closes it.
 - A click or Enter recalls a scene; arrow keys, right-click and drags do not. Update stores everything on screen into the selected scene, keeps its message and refreshes its thumbnail.
