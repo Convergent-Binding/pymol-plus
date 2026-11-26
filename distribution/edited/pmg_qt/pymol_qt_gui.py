@@ -988,6 +988,14 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
                 for callback in self.setting_callbacks[setting]:
                     callback(current_value)
 
+        # BEGIN EDITED CODE SEGMENT
+        # :author Hannah Kullik
+        # PyMOL+ GUI features follow PyMOL's 500 ms tick and receive each
+        # feedback batch, after setting_callbacks have run, in the new GUI only
+        import pymol3.app
+        pymol3.app.tick(self, feedback or ())
+        # END EDITED CODE SEGMENT
+
         self.feedback_timer.start(500)
 
     def doPrompt(self):
