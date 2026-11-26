@@ -9,6 +9,7 @@ import pytest
 import pymol.cmd
 import pymol.gui
 from pymol3 import app
+from pymol3 import scenes
 
 from ..pymol3_ui import qt_binding
 
@@ -34,6 +35,7 @@ def reset_pymol_and_switch(monkeypatch: pytest.MonkeyPatch, tmp_path):
   tmp_store = str(tmp_path / "settings.ini")
   monkeypatch.setattr(app, "_state", app._State())
   monkeypatch.setattr(app, "FEATURE_MODULES", ())
+  app.register(scenes.FEATURE)
   monkeypatch.setattr(
       app,
       "_open_settings",

@@ -57,7 +57,7 @@ The app's ``startup_wrapper.py`` sets it from ``--new-gui`` and
 ``--classic-gui`` under the same name, before this package can be imported.
 """
 
-FEATURE_MODULES: tuple[str, ...] = ()
+FEATURE_MODULES: tuple[str, ...] = ("pymol3.scenes",)
 """The modules of the PyMOL+ GUI features, imported by ``start``."""
 
 SETTINGS_ORGANIZATION = "PyMOL-Open-Source"

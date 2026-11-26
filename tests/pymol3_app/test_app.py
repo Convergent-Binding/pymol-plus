@@ -16,6 +16,9 @@ from ..pymol3_ui import qt_binding
 qt = qt_binding.import_qt()
 """The Qt binding PyMOL found."""
 
+_DEFAULT_FEATURE_MODULES = app.FEATURE_MODULES
+"""Feature modules configured on ``pymol3.app`` by default."""
+
 
 class _Recorder:
   """A feature's callbacks that note each call in a shared list."""
@@ -536,3 +539,8 @@ def test_feature_failed_in_start_skips_tick(monkeypatch, main_window, capsys):
   app.tick(main_window, ["line"])
   assert tmp_calls == []
   assert "broken start" in capsys.readouterr().out
+
+
+def test_default_feature_modules_includes_scenes():
+  """Default FEATURE_MODULES includes the docked Scenes panel feature."""
+  assert "pymol3.scenes" in _DEFAULT_FEATURE_MODULES

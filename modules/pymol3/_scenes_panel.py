@@ -1110,6 +1110,7 @@ class ScenesController:
   def open_panel(self) -> None:
     """Shows and raises the docked Scenes panel, marking auto-open done."""
     self._auto_opened = True
+    self.sync(refresh_thumbnails=False, auto_open=False)
     self._dock_panel.show()
 
   def create_scene(self) -> None:

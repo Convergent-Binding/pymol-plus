@@ -922,6 +922,14 @@ PyMOL> color ye<TAB>    (will autocomplete "yellow")
         self.shortcut_menu_filter_dialog.show()
 
     def scene_panel_menu_dialog(self):
+        # BEGIN EDITED CODE SEGMENT
+        # :author Hannah Kullik
+        # In the new GUI, Scene -> Scenes... opens the docked Scenes panel;
+        # the classic GUI keeps PyMOL's floating ScenePanel dialog.
+        import pymol3.scenes
+        if pymol3.scenes.open_panel(self):
+            return
+        # END EDITED CODE SEGMENT
         from .scene_bin_gui import ScenePanel
 
         if self.scene_panel_dialog is None:

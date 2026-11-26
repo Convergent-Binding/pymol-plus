@@ -9,6 +9,7 @@ import pytest
 
 import pymol.cmd
 from pymol3 import _scenes_panel
+from pymol3 import app
 from pymol3 import scenes
 from pymol3 import ui
 
@@ -539,3 +540,228 @@ def test_drag_reorder_updates_pymol_playback_order_once_without_recall(
 
   pymol.cmd.scene("", "next")
   assert pymol.cmd.get("scene_current_name") == "001"
+
+
+def test_starts_hidden_auto_opens_once_and_stays_closed_after_close(
+    scene_window,
+):
+  """Panel starts hidden, auto-opens on first scene, and stays closed.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+  """
+  app.start(scene_window)
+  app.ready(scene_window)
+  tmp_panel = ui.get_dock_panel(scenes.PANEL_ID)
+  assert tmp_panel is not None
+  assert (
+      scene_window.dockWidgetArea(tmp_panel.dock_widget)
+      == qt.QtCore.Qt.DockWidgetArea.RightDockWidgetArea
+  )
+  assert not tmp_panel.is_visible()
+
+  pymol.cmd.scene("F1", "store")
+  for tmp_callback in scene_window.setting_callbacks[
+      _scenes_panel.SETTING_SCENES_CHANGED
+  ]:
+    tmp_callback(True)
+  app.tick(scene_window)
+  assert tmp_panel.is_visible()
+  tmp_model = tmp_panel.dock_widget.widget().list_view.model()
+  assert [
+      tmp_model.index(tmp_row, 0).data()
+      for tmp_row in range(tmp_model.rowCount())
+  ] == ["F1"]
+  assert tmp_model.index(0, 0).data(_scenes_panel.IS_CURRENT_ROLE) is True
+
+  tmp_panel.dock_widget.close()
+  assert not tmp_panel.is_visible()
+
+  pymol.cmd.scene("F2", "store")
+  app.tick(scene_window)
+  assert [
+      tmp_model.index(tmp_row, 0).data()
+      for tmp_row in range(tmp_model.rowCount())
+  ] == ["F1", "F2"]
+  assert not tmp_panel.is_visible()
+
+  assert scenes.open_panel(scene_window) is True
+  assert tmp_panel.is_visible()
+
+
+def test_auto_opens_on_session_with_scenes_and_respects_manual_close(
+    scene_window, monkeypatch, tmp_path
+):
+  """Loading a .pse with scenes auto-opens; manual close prevents auto-open.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+    monkeypatch: Redirects ``pymol.gui.get_qtwindow`` for the second window.
+    tmp_path: Temporary folder for saving the test session file.
+  """
+  pymol.cmd.pseudoatom("mol")
+  pymol.cmd.scene("S1", "store")
+  tmp_session = tmp_path / "with_scenes.pse"
+  pymol.cmd.save(str(tmp_session))
+  pymol.cmd.reinitialize()
+
+  app.start(scene_window)
+  app.ready(scene_window)
+  tmp_panel = ui.get_dock_panel(scenes.PANEL_ID)
+  assert not tmp_panel.is_visible()
+
+  pymol.cmd.load(str(tmp_session))
+  app.tick(scene_window)
+  assert tmp_panel.is_visible()
+  assert tmp_panel.dock_widget.widget().list_view.model().names() == ["S1"]
+
+  pymol.cmd.reinitialize()
+  tmp_second_window = qt.QtWidgets.QMainWindow()
+  tmp_second_window.setCentralWidget(qt.QtWidgets.QWidget())
+  tmp_second_window.cmd = pymol.cmd
+  tmp_second_window.show()
+  monkeypatch.setattr(
+      "pymol.gui.get_qtwindow", lambda: tmp_second_window
+  )
+  try:
+    scenes.start(tmp_second_window)
+    scenes.ready(tmp_second_window)
+    tmp_second_controller = scenes._controller(tmp_second_window)
+    tmp_second_panel = tmp_second_controller._dock_panel
+    assert not tmp_second_panel.is_visible()
+    assert scenes.open_panel(tmp_second_window) is True
+    assert tmp_second_panel.is_visible()
+    tmp_second_panel.dock_widget.close()
+    assert not tmp_second_panel.is_visible()
+
+    pymol.cmd.scene("new", "store")
+    app.tick(tmp_second_window)
+    assert tmp_second_controller._model.names() == ["001"]
+    assert not tmp_second_panel.is_visible()
+  finally:
+    tmp_second_window.close()
+    tmp_second_window.deleteLater()
+
+
+def test_external_scene_order_current_scene_and_reinitialize_sync(
+    scene_window,
+):
+  """External order, PgDn, editing guard, and reinitialize stay in sync.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+  """
+  pymol.cmd.scene("001", "store")
+  pymol.cmd.scene("002", "store")
+  pymol.cmd.scene("003", "store")
+  app.start(scene_window)
+  app.ready(scene_window)
+  tmp_widget = ui.get_dock_panel(scenes.PANEL_ID).dock_widget.widget()
+  tmp_view = tmp_widget.list_view
+  tmp_model = tmp_view.model()
+  tmp_view.resize(260, 300)
+  qt.QtWidgets.QApplication.processEvents()
+
+  pymol.cmd.scene_order(["003", "001", "002"])
+  app.tick(scene_window)
+  assert tmp_model.names() == ["003", "001", "002"]
+
+  pymol.cmd.scene("", "next")
+  app.tick(scene_window)
+  assert tmp_model.index(0, 0).data(_scenes_panel.IS_CURRENT_ROLE) is False
+  assert tmp_model.index(1, 0).data(_scenes_panel.IS_CURRENT_ROLE) is True
+
+  tmp_view.setCurrentIndex(tmp_model.index(0, 0))
+  _simulate_key_press(tmp_view, qt.QtCore.Qt.Key.Key_F2)
+  assert tmp_view.state() == qt.QtWidgets.QAbstractItemView.State.EditingState
+  pymol.cmd.scene("004", "store")
+  app.tick(scene_window)
+  assert tmp_view.state() == qt.QtWidgets.QAbstractItemView.State.EditingState
+  assert tmp_model.names() == ["003", "001", "002"]
+
+  tmp_editor = tmp_view.findChild(qt.QtWidgets.QLineEdit)
+  _simulate_key_press(tmp_editor, qt.QtCore.Qt.Key.Key_Escape)
+  qt.QtWidgets.QApplication.processEvents()
+  app.tick(scene_window)
+  assert tmp_model.names() == ["003", "001", "002", "004"]
+
+  pymol.cmd.reinitialize()
+  app.tick(scene_window)
+  assert tmp_model.rowCount() == 0
+  assert not tmp_widget.empty_label.isHidden()
+
+
+def test_thumbnail_fetches_on_change_and_caps_retries_when_empty(
+    scene_window, monkeypatch
+):
+  """Thumbnails fetch on change and stop polling after arrival or retry cap.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+    monkeypatch: Supplies controlled thumbnail bytes and counts queries.
+  """
+  tmp_valid_png = _valid_png_bytes()
+  tmp_payloads = {"001": b"", "002": b""}
+  tmp_calls = []
+
+  def tmp_fake_thumbnail(name: str, _self=pymol.cmd) -> bytes:
+    """Records each thumbnail query and returns the configured buffer.
+
+    Args:
+      name: Scene name requested.
+      _self: Unused cmd binding.
+
+    Returns:
+      Configured PNG or empty bytes.
+    """
+    tmp_calls.append(name)
+    return tmp_payloads.get(name, b"")
+
+  monkeypatch.setattr(pymol.cmd, "get_scene_thumbnail", tmp_fake_thumbnail)
+  pymol.cmd.scene("001", "store")
+  pymol.cmd.scene("002", "store")
+  app.start(scene_window)
+  app.ready(scene_window)
+  tmp_calls.clear()
+
+  tmp_payloads["001"] = tmp_valid_png
+  tmp_payloads["002"] = tmp_valid_png
+  app.tick(scene_window)
+  assert sorted(tmp_calls) == ["001", "002"]
+
+  tmp_calls.clear()
+  for _ in range(10):
+    app.tick(scene_window)
+  assert tmp_calls == []
+
+  pymol.cmd.scene("003", "store")
+  tmp_payloads["003"] = b""
+  app.tick(scene_window)
+  tmp_calls.clear()
+  for _ in range(scenes.MAX_THUMBNAIL_RETRIES + 10):
+    app.tick(scene_window)
+  assert len(tmp_calls) == scenes.MAX_THUMBNAIL_RETRIES
+  assert all(tmp_name == "003" for tmp_name in tmp_calls)
+
+
+def test_scene_menu_hook_opens_panel_in_new_gui_and_falls_back_in_classic(
+    scene_window, monkeypatch
+):
+  """Scene menu hook opens the docked panel only when the new GUI is active.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+    monkeypatch: Switches between new and classic GUI styles.
+  """
+  app.start(scene_window)
+  app.ready(scene_window)
+  tmp_panel = ui.get_dock_panel(scenes.PANEL_ID)
+  assert not tmp_panel.is_visible()
+  assert scenes.open_panel(scene_window) is True
+  assert tmp_panel.is_visible()
+
+  monkeypatch.setattr(app, "_state", app._State())
+  monkeypatch.setenv(app.ENVIRONMENT_VARIABLE, app.CLASSIC)
+  app.register(scenes.FEATURE)
+  assert app.style() == app.CLASSIC
+  assert scenes.open_panel(scene_window) is False
