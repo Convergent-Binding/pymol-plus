@@ -765,3 +765,76 @@ def test_scene_menu_hook_opens_panel_in_new_gui_and_falls_back_in_classic(
   app.register(scenes.FEATURE)
   assert app.style() == app.CLASSIC
   assert scenes.open_panel(scene_window) is False
+
+
+def _fire_update_feedback(window) -> None:
+  """Simulates PyMOLQtGUI.update_feedback() callbacks followed by app.tick().
+
+  Args:
+    window: Main window fixture with ``cmd`` and ``setting_callbacks``.
+  """
+  for tmp_setting in window.cmd.get_setting_updates() or ():
+    if tmp_setting in window.setting_callbacks:
+      tmp_value = window.cmd.get_setting_tuple(tmp_setting)[1][0]
+      for tmp_callback in window.setting_callbacks[tmp_setting]:
+        tmp_callback(tmp_value)
+  app.tick(window)
+
+
+def test_scenes_changed_callback_preserves_inline_editor_and_drag_state(
+    scene_window,
+):
+  """setting_callbacks[254] does not clobber inline rename or active drag.
+
+  Args:
+    scene_window: Main window fixture wired to PyMOL.
+  """
+  pymol.cmd.scene("001", "store")
+  pymol.cmd.scene("002", "store")
+  app.start(scene_window)
+  app.ready(scene_window)
+  tmp_widget = ui.get_dock_panel(scenes.PANEL_ID).dock_widget.widget()
+  tmp_view = tmp_widget.list_view
+  tmp_model = tmp_view.model()
+  tmp_view.resize(260, 300)
+  qt.QtWidgets.QApplication.processEvents()
+
+  _simulate_row_click(tmp_view, 0)
+  tmp_row_zero_center = tmp_view.visualRect(tmp_model.index(0, 0)).center()
+  tmp_double_click = qt.QtGui.QMouseEvent(
+      qt.QtCore.QEvent.Type.MouseButtonDblClick,
+      qt.QtCore.QPointF(tmp_row_zero_center),
+      qt.QtCore.QPointF(tmp_view.viewport().mapToGlobal(tmp_row_zero_center)),
+      qt.QtCore.Qt.MouseButton.LeftButton,
+      qt.QtCore.Qt.MouseButton.LeftButton,
+      qt.QtCore.Qt.KeyboardModifier.NoModifier,
+  )
+  tmp_view.mouseDoubleClickEvent(tmp_double_click)
+  assert tmp_view.state() == qt.QtWidgets.QAbstractItemView.State.EditingState
+  tmp_editor = tmp_view.findChild(qt.QtWidgets.QLineEdit)
+  assert tmp_editor is not None
+  tmp_editor.setText("Draft name")
+
+  _fire_update_feedback(scene_window)
+  assert tmp_view.state() == qt.QtWidgets.QAbstractItemView.State.EditingState
+  assert tmp_editor.text() == "Draft name"
+
+  pymol.cmd.scene("003", "store")
+  _fire_update_feedback(scene_window)
+  assert tmp_view.state() == qt.QtWidgets.QAbstractItemView.State.EditingState
+  assert tmp_editor.text() == "Draft name"
+  assert tmp_model.names() == ["001", "002"]
+
+  _simulate_key_press(tmp_editor, qt.QtCore.Qt.Key.Key_Return)
+  qt.QtWidgets.QApplication.processEvents()
+  _fire_update_feedback(scene_window)
+  assert tmp_model.names() == ["Draft name", "002", "003"]
+
+  tmp_view.setState(qt.QtWidgets.QAbstractItemView.State.DraggingState)
+  pymol.cmd.scene("004", "store")
+  _fire_update_feedback(scene_window)
+  assert tmp_model.names() == ["Draft name", "002", "003"]
+
+  tmp_view.setState(qt.QtWidgets.QAbstractItemView.State.NoState)
+  _fire_update_feedback(scene_window)
+  assert tmp_model.names() == ["Draft name", "002", "003", "004"]

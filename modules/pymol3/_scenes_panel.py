@@ -242,6 +242,11 @@ class _ScenesListModel(QtCore.QAbstractListModel):
       self.dataChanged.emit(
           self.index(0, 0),
           self.index(len(self._entries) - 1, 0),
+          [
+              PIXMAP_ROLE,
+              IS_CURRENT_ROLE,
+              int(QtCore.Qt.ItemDataRole.ToolTipRole),
+          ],
       )
     return False
 
@@ -956,6 +961,17 @@ class ScenesController:
         self._on_current_scene_changed
     )
 
+  def _is_interacting(self) -> bool:
+    """Returns True while the user is renaming or dragging a scene row.
+
+    Returns:
+      True during inline editing or row drag-and-drop.
+    """
+    return self._widget.list_view.state() in (
+        QtWidgets.QAbstractItemView.State.EditingState,
+        QtWidgets.QAbstractItemView.State.DraggingState,
+    )
+
   def _on_scenes_changed(self, _value: object) -> None:
     """Marks scene metadata dirty when PyMOL's ``scenes_changed`` fires.
 
@@ -963,6 +979,8 @@ class ScenesController:
       _value: Setting value passed by ``PyMOLQtGUI`` (unused).
     """
     self._dirty_scenes = True
+    if self._is_interacting():
+      return
     self.sync(refresh_thumbnails=True, auto_open=True)
 
   def _on_current_scene_changed(self, value: object) -> None:
@@ -971,6 +989,8 @@ class ScenesController:
     Args:
       value: New ``scene_current_name`` string.
     """
+    if self._is_interacting():
+      return
     self._current_name = str(value or "")
     self._model.update_current(self._current_name)
 
@@ -1088,10 +1108,7 @@ class ScenesController:
 
   def on_tick(self) -> None:
     """Runs on PyMOL's 500 ms timer to catch unnotified scene changes."""
-    if self._widget.list_view.state() in (
-        QtWidgets.QAbstractItemView.State.EditingState,
-        QtWidgets.QAbstractItemView.State.DraggingState,
-    ):
+    if self._is_interacting():
       return
     tmp_names = list(self._cmd.get_scene_list() or ())
     tmp_current = str(self._cmd.get("scene_current_name") or "")
