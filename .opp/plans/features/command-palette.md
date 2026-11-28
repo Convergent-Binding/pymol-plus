@@ -6,9 +6,9 @@
 
 **Architecture:** GUI-free command logic, a shared design foundation (tokens, themes, icons) and the GUI (views and controllers) are separate parts of `pymol3`. The panes stay Qt dock widgets, because `pymol3.ui` hands them to plugins. The app's marked copy of `pymol_qt_gui.py` gets only short hooks. The branch `command-palette` is a prototype: a source of lessons, not a specification and not a base.
 
-**Tech Stack:** Python 3.13, `pymol.Qt` (PySide6 6.9 in the app), Bazel (`rules_python`), pytest with Qt's `offscreen` platform (pytest-qt if step 1 adds it).
+**Tech Stack:** Python 3.13, `pymol.Qt` (PySide6 6.9 in the app), Bazel (`rules_python`), pytest with Qt's `offscreen` platform.
 
-**Spec:** issue #16, `## Design` below, and the [GUI vision board](https://claude.ai/artifact/59LAigu97Z4jZ13MQyZPL4), version `1795900721-3b67`, which shows every state. Where they differ, this plan wins on behaviour and the board on look. This plan replaces the one of 2026-11-23, revised on 2026-11-25.
+**Spec:** issue #16, `## Design` below, and the [GUI vision board](https://claude.ai/artifact/59LAigu97Z4jZ13MQyZPL4), version `1795902237-69ca`, which shows every state. Where they differ, this plan wins on behaviour and the board on look. This plan replaces the one of 2026-11-23, revised on 2026-11-25.
 
 ## Design
 
@@ -17,6 +17,12 @@
 - **Recent must not rerun a command by accident.** While Recent shows, nothing is highlighted until the user moves with the arrow keys; until then, Enter and Tab do nothing. On a first start, the first common task is highlighted.
 - **A single word is a search.** Typing `reinitialize` and pressing Enter starts its steps and its confirmation. A typed command line has a space or a comma, or matches no command; it runs on Enter without asking.
 - **No trial for the rounded viewer corners.** Step 3 builds them directly, and they are checked like the rest of the step. If they do not work well on a platform, the owner decides whether the viewer gets square corners, and the board changes to match.
+
+### Decided with the step 1 plan (2026-11-28)
+
+- **No board ledger for now.** It cannot record boards shared by all platforms. Each step's plan lists its boards with version and fingerprint, and each board gets a test that names it. The ledger can return once `opp-gui` supports shared boards.
+- **The dark accent is `#d8365b`** instead of `#d6335b`, so selected radio buttons and ticked checkboxes reach 3:1 on popups.
+- **The Options window uses the system's title bar;** the one drawn on its boards is only a placeholder.
 
 ### Why
 
@@ -129,7 +135,7 @@ Module names inside the parts above, ranking weights, the painting technique, an
 Every step holds these:
 
 - "App: PySide6 stays at 6.9 (6.10+ drops macOS 12 and RHEL/AlmaLinux 8); Python 3.13; biopython 1.86."
-- "New dependency versions only when they are at least 14 days old (Dependabot cooldown)." No new runtime dependency. pytest-qt is a test dependency if step 1 adds it.
+- "New dependency versions only when they are at least 14 days old (Dependabot cooldown)." No new runtime dependency. No new test dependency either: the wheel jobs install only pytest.
 - "Changes reach `production` only through pull requests"; Hannah or Martin approves and merges by hand.
 - "`distribution/edited/` holds upstream PyMOL files with marked edits (`BEGIN EDITED CODE SEGMENT`)". No file under `modules/pymol/`, `modules/pmg_qt/`, `modules/pmg_tk/`, `modules/chempy/` or `modules/pymol2/` changes.
 - Nothing in PyMOL's or `pymol3`'s public API is removed or changed. Commands run through the same path as the command line.
@@ -148,7 +154,6 @@ Every step holds these:
 .opp/plans/gui-window.md
 .opp/plans/command-palette-view.md
 .opp/plans/gui-toolbar.md
-.opp/gui/**
 modules/pymol3/**
 tests/BUILD.bazel
 tests/pymol3_*/**
@@ -157,8 +162,7 @@ distribution/edited/BUILD.bazel
 distribution/linux/BUILD.bazel
 distribution/os_specific/**
 distribution/licenses/**
-tools/bazel/requirements.in
-tools/bazel/requirements_lock*.txt
+tools/bazel/tests/wheel_layout_test.py
 README.md
 docs/decisions/**
 
@@ -185,7 +189,7 @@ Each step is one branch from `production` and one pull request. Its Superpowers 
 **Before step 1:** this plan is merged, and Hannah has decided on Material Symbols. **Before step 3:** PR #27 is merged. If it is closed instead, step 3 adds `tick` and `visible=` with the same signatures. Before steps 1 and 3, agree with Hannah on files that both branches change.
 
 1. **Design foundation** (`gui-foundation`).
-   - Tokens for both themes and three colour-vision modes; style sheet, palette and fonts for each of our own windows; a theme manager with Light, Dark and Follow the system; the Animate switch; the icons; the Options window; GUI tests tied to their boards, with the ledger in `.opp/gui/`. Until steps 4 and 5 add its entries, only tests open the Options window.
+   - Tokens for both themes and three colour-vision modes; style sheet, palette and fonts for each of our own windows; a theme manager with Light, Dark and Follow the system; the Animate switch; the icons; the Options window; GUI tests that name their boards. Until steps 4 and 5 add its entries, only tests open the Options window.
    - Update the theme and colour parts of `objects-panel.md`: the theme and its choices come from here.
    - *Boards:* Colours, TypeShape, Icons, Components, Options, OptionsAccessibility.
    - *Done when* a theme or colour-vision change restyles open test windows at once and survives a restart, contrast is tested in every mode, and nothing changes in the classic GUI or outside our own windows.
@@ -240,7 +244,7 @@ Each line gets its test in the step named.
 Before each step's pull request:
 
 - `bazel test //tests` passes, with the step's tests in both themes where they check the look; `bazel test //distribution/...` passes, `//distribution/edited:edited_base_test` and the app's smoke test included.
-- `bazel run //distribution:checks` and `python3 .opp/style/check.py --committed` report nothing. From step 1 on, `python3 .opp/gui/ledger.py check` passes.
+- `bazel run //distribution:checks` and `python3 .opp/style/check.py --committed --base origin/production` report nothing.
 - Each GUI state is rendered in both themes, and the colours also in each colour-vision mode, and looked at beside its board. Each step gets a fresh review of its exact commits; GUI steps also get the `opp-gui:gui-reviewer`.
 - A classic start is compared with `production`: window, menus, panels and command line.
 - By hand in the built app on Windows, macOS (with ⌘) and Linux: the step's criteria, at 100 % and 200 % scaling, with `--new-gui` and `--classic-gui`. A platform nobody could check is named in the pull request, and the feature is not done until it has been checked.
